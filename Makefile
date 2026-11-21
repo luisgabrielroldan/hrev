@@ -1,10 +1,16 @@
 # The viewer is a TypeScript app in ui/. The Go binary embeds its build, so the UI is built first.
 BIN ?= hrev
+# The version that `hrev version` prints. A release build gets the tag, such as v1.2.3. Other builds get the
+# output of git describe, such as v1.2.3-4-gabc1234-dirty.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
+# The platforms of a release. hrev uses flock, so Windows is not a target.
+PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
 
-.PHONY: build ui ui-deps test e2e coverage clean
+.PHONY: build ui ui-deps test e2e coverage dist clean
 
 build: ui
-	go build -o $(BIN) .
+	go build -ldflags '$(LDFLAGS)' -o $(BIN) .
 
 ui: ui-deps
 	cd ui && npm run build
@@ -40,6 +46,21 @@ coverage: ui-deps
 	@echo "== Viewer (TypeScript), browser tests"; node -e "const s=require('./.coverage/js/coverage-summary.json').total; for (const k of ['lines','statements','functions','branches']) console.log(k.padEnd(11), s[k].pct + '%')"
 	$(MAKE) build > /dev/null
 
+# Release archives for all platforms, and their checksums, in dist/. The release workflow runs this target.
+dist: ui
+	rm -rf dist
+	mkdir -p dist
+	@set -e; for p in $(PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; name=hrev_$(VERSION)_$${os}_$${arch}; \
+		echo "== $$name"; \
+		mkdir -p dist/$$name; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$$name/hrev .; \
+		cp LICENSE README.md dist/$$name/; \
+		tar -C dist -czf dist/$$name.tar.gz $$name; \
+		rm -rf dist/$$name; \
+	done
+	cd dist && shasum -a 256 *.tar.gz > checksums.txt
+
 clean:
-	rm -f $(BIN)
+	rm -rf $(BIN) dist
 	find internal/web/dist -mindepth 1 ! -name README -delete

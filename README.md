@@ -15,7 +15,9 @@ The agent learns all of this from the hrev skill.
 
 ## Install
 
-You need Go 1.24 or later and Node.js 22.18 or later.
+Download the archive for your platform from the [releases](https://github.com/luisgabrielroldan/hrev/releases) page. Each archive contains the `hrev` binary. The file `checksums.txt` has the SHA-256 checksum of each archive.
+
+To build from source, you need Go 1.24 or later and Node.js 22.18 or later.
 
 ```sh
 git clone https://github.com/luisgabrielroldan/hrev.git
@@ -66,7 +68,21 @@ make test    # type check and test the viewer, then go vet and go test
 make e2e     # browser tests of the viewer against the real binary
 make coverage  # coverage of all tests together; the HTML report is in .coverage/js
 make ui      # build only the viewer
+make dist    # release archives for all platforms in dist/
 ```
+
+`hrev version` prints the version. A release build prints the tag. A build from a checkout prints the output of `git describe`.
+
+## Release
+
+Push a tag that starts with `v`:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow (`.github/workflows/release.yml`) runs the tests, runs `make dist VERSION=<tag>` and publishes a GitHub release with the archives and the checksums. A tag with a hyphen, such as `v0.1.0-rc.1`, gives a pre-release. The test workflow (`.github/workflows/test.yml`) runs on each push to `main` and on each pull request.
 
 `make e2e` uses the installed Google Chrome. Without Chrome, run `npx playwright install chromium` in `ui/` and set `PW_CHANNEL=` (empty).
 

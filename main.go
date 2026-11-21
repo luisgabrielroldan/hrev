@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -37,6 +38,7 @@ Usage:
   hrev comment <id> --thread <thread-id> [--author NAME] [<text>]
   hrev skill
   hrev skill install <dir> [--force]
+  hrev version
 
 "reply" and "comment" read the text from stdin when there is no <text>.
 "comment" writes a pending comment. Only the user sends comments, in the viewer.
@@ -71,6 +73,8 @@ func main() {
 		err = cmdComment(rest)
 	case "skill":
 		err = cmdSkill(rest)
+	case "version", "--version":
+		fmt.Println("hrev", appVersion())
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -80,6 +84,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, "hrev:", err)
 		os.Exit(1)
 	}
+}
+
+// version is the release version. The release build sets it with -ldflags "-X main.version=v1.2.3".
+var version = ""
+
+// appVersion gives the version set at build time. Without one, it gives the module version that
+// "go install ...@v1.2.3" records, or "dev" for a build from a source checkout.
+func appVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
 }
 
 // ---------- arguments ----------

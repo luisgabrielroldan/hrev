@@ -1,0 +1,42 @@
+# A push of a tag such as v1.2.3 runs the tests, builds the archives for all platforms and publishes a GitHub
+# release. The binaries print the tag in `hrev version`.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: make dist VERSION=${{ github.ref_name }}
+      - name: Check the version in the binary
+        run: |
+          tar -xzf dist/hrev_${{ github.ref_name }}_linux_amd64.tar.gz -C "$RUNNER_TEMP"
+          test "$("$RUNNER_TEMP/hrev_${{ github.ref_name }}_linux_amd64/hrev" version)" = "hrev ${{ github.ref_name }}"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "${{ github.ref_name }}" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "${{ github.ref_name }}" dist/*.tar.gz dist/checksums.txt --verify-tag --generate-notes $prerelease

@@ -5,3 +5,4 @@
 /ui/test-results/
 /ui/playwright-report/
 /.coverage/
+/dist/
