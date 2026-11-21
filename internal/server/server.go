@@ -20,7 +20,7 @@ import (
 )
 
 // NotListeningDelay is how long no wait must be active before the viewer shows "not listening".
-const NotListeningDelay = 5 * time.Second
+const NotListeningDelay = 30 * time.Second
 
 // Agent status values sent to the viewer.
 const (
@@ -72,9 +72,12 @@ func New(st *store.State, files []*diffparse.File, token string) *Server {
 	}
 }
 
-// Listen opens a listener on 127.0.0.1 with a free port.
-func (s *Server) Listen() error {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+// Listen opens a listener on 127.0.0.1. It tries the given port first, then any free port.
+func (s *Server) Listen(port int) error {
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil && port != 0 {
+		l, err = net.Listen("tcp", "127.0.0.1:0")
+	}
 	if err != nil {
 		return err
 	}
@@ -202,7 +205,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		delete(s.clients, ch)
 		s.mu.Unlock()
 	}()
-	fmt.Fprint(w, "event: update\ndata: {}\n\n")
+	fmt.Fprint(w, "retry: 1000\nevent: update\ndata: {}\n\n")
 	flusher.Flush()
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
@@ -633,6 +636,18 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]int{"files": len(files), "threads": len(s.st.Threads), "outdated": outdated})
+}
+
+// OpenIfNoViewer opens the browser after the delay, unless a viewer tab connected in that time.
+func (s *Server) OpenIfNoViewer(delay time.Duration) {
+	time.AfterFunc(delay, func() {
+		s.mu.Lock()
+		open := len(s.clients) > 0
+		s.mu.Unlock()
+		if !open {
+			s.OpenURL(s.URL())
+		}
+	})
 }
 
 func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {

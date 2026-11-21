@@ -68,11 +68,16 @@ All text in the viewer is in English. The viewer uses a dark theme only.
 
 ### 5.1 Layout
 
-- A header at the top shows the title, the description, the diff source, the number of pending comments, and the Send button.
+- A header at the top shows the title, the description and the diff source, with the full width. Below a separator line, a bar shows the file tree button on the left, and the number of pending comments and the Send button on the right.
 - The title, the description and the diff source come from the agent (`--title`, `--description`, `--source`).
 - The Send button is disabled when there are 0 pending comments.
+- When the page is scrolled, only the bar stays visible, and it also shows the title. At the top of the page, the full header returns.
 - Below the header, a file tree is on the left and the diff is on the right.
-- The file tree and the diff scroll independently.
+- The page has 1 scroll, and the diff scrolls with the page. The header stays at the top. The file tree stays beside the diff, below the header, and has its own scroll. File headers stay below the header while their file is visible.
+- A drag handle between the file tree and the diff changes the width of the file tree. The browser remembers the width.
+- A gear button right of the Send button opens a settings menu. The menu has a Layout section with Unified and Split. A check mark shows the current layout.
+- The file tree button hides or shows the file tree. When the file tree is hidden, the diff uses the full width. The browser remembers the choice.
+- In the file tree, a file with threads shows a comment icon and the number of threads.
 - At phone width, the file tree goes above the diff, and the page scrolls as 1 page.
 
 ### 5.2 File tree
@@ -86,7 +91,7 @@ All text in the viewer is in English. The viewer uses a dark theme only.
 
 ### 5.3 Diff
 
-- A switch selects the unified view or the split view. Each review session starts in the unified view.
+- The Layout section of the settings menu selects the unified view or the split view. Each review session starts in the unified view.
 - In the split view, the old code is on the left and the new code is on the right.
 - Each file has a header with an arrow. A click on the header opens or closes the file.
 - At the top right of each file header: a counter of added and removed lines, and a button to comment on the whole file.
@@ -130,11 +135,13 @@ The viewer keeps a live connection to the server. The server computes the status
 
 | Status | Visible when |
 |---|---|
-| "Disconnected from reviewit. New comments cannot be saved." | The viewer has no connection to the server. The viewer tries to connect again. |
+| "Reconnecting to reviewit… Your comments are safe. New comments can be saved when the connection returns." | The viewer has no connection to the server. The viewer tries to connect again every second. |
 | "The agent is working on your comments" | `wait` printed events, and the next `wait` did not start yet. There is no time limit. |
-| "The agent is not listening" | No `wait` is active for 5 seconds, and the "working" status is not active. |
+| "The agent is not listening right now. Your comments are saved. The agent gets them when it listens again." | No `wait` is active for 30 seconds, and the "working" status is not active. |
 
 The window is open when at least 1 viewer tab has a live connection to the server.
+
+Each thread with a sent comment also shows its own status under the last message. "Waiting for the agent to pick this up" means that no `wait` printed the comment yet. "The agent is working on this…" means that `wait` printed the comment and the agent did not reply yet. A collapsed thread shows an "Agent working" badge. The agent runs no extra command for this status.
 
 ## 6. Command line interface
 
@@ -152,7 +159,7 @@ reviewit reply <id> <thread-id> [<text>]
 |---|---|
 | `open <file.diff>` | Creates a review session, copies the diff file into the session folder, starts the server in the same process, opens the default browser, and prints the id and the URL. The process keeps running. The agent runs it in the background. |
 | `open --replace ID` | Same as `open`. Before it creates anything, it checks session ID. If session ID has pending or sent comments, the command fails and prints the number of those comments. `--force` allows the replacement in that case. After the start, the new server tells the server of session ID to stop. If that server is not running, nothing else happens. |
-| `open --resume <id>` | Starts the server again on the saved state of a review session, on a new port, and opens the browser. If the server of that id is already running, it fails and prints the URL of the running server. |
+| `open --resume <id>` | Starts the server again on the saved state of a review session, with the same port and token as before. An open viewer tab reconnects by itself and shows the current state. If no tab connects within 4 seconds, the command opens the browser. If the saved port is in use, the server uses a new port. If the server of that id is already running, it fails and prints the URL of the running server. |
 | `refresh` | Copies a new diff file into the session folder, places the threads again (section 5.6), and updates the viewer. An option that is not given keeps its previous value. |
 | `show` | Opens the browser if no viewer tab is connected. Otherwise it does nothing. |
 | `wait` | Waits for events, prints all queued events as JSON (section 7.1), and exits with code 0. If events are already queued, it prints them and exits immediately. If a newer `wait` starts on the same id, the older `wait` exits with code 0, no events, and the message "replaced". If `open --replace` stops the server, `wait` exits with code 0 and the message "was replaced by <new id>". If the server stops for another reason, `wait` exits with a non-zero code and the "not running" message. |
@@ -244,7 +251,7 @@ The state is saved in `~/.reviewit/<id>/`. The folder contains:
 - the state of the review session;
 - the copy of the current diff file;
 - the event queue;
-- `server.json` with the port, the token and the process id, readable only by the user;
+- `server.json` with the port, the token and the process id, readable only by the user. `state.json` also keeps the last port and token, so that `open --resume` can use the same address again;
 - a lock file.
 
 ### 8.3 Rules

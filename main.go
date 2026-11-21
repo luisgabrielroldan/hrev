@@ -231,9 +231,17 @@ func resume(id string) error {
 
 // run serves a review session until the server stops.
 func run(st *store.State, files []*diffparse.File, replace string) error {
-	srv := server.New(st, files, store.RandomHex(16))
+	resumed := st.Token != ""
+	if !resumed {
+		st.Token = store.RandomHex(16)
+	}
+	srv := server.New(st, files, st.Token)
 	srv.OpenURL = openBrowser
-	if err := srv.Listen(); err != nil {
+	if err := srv.Listen(st.Port); err != nil {
+		return err
+	}
+	st.Port = srv.Port
+	if err := store.Save(st); err != nil {
 		return err
 	}
 	if err := store.WriteServer(st.ID, &store.ServerInfo{Port: srv.Port, Token: srv.Token, PID: os.Getpid()}); err != nil {
@@ -252,7 +260,12 @@ func run(st *store.State, files []*diffparse.File, replace string) error {
 	}()
 
 	fmt.Printf("id: %s\nurl: %s\n", st.ID, srv.URL())
-	openBrowser(srv.URL())
+	if resumed {
+		// An open tab reconnects by itself to the same address. Open a tab only when none comes back.
+		srv.OpenIfNoViewer(4 * time.Second)
+	} else {
+		openBrowser(srv.URL())
+	}
 	replacedBy := srv.Serve()
 
 	if dir, err := store.Dir(st.ID); err == nil {
@@ -432,7 +445,12 @@ func cmdWait(argv []string) error {
 	if err := needPos(a, 1, "wait <id>"); err != nil {
 		return err
 	}
+	// The agent can start wait right after open or open --resume. Give the server a few seconds to start.
 	c, err := connect(a.pos[0])
+	for i := 0; err != nil && store.Exists(a.pos[0]) && i < 20; i++ {
+		time.Sleep(250 * time.Millisecond)
+		c, err = connect(a.pos[0])
+	}
 	if err != nil {
 		return err
 	}

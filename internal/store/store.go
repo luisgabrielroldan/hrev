@@ -79,6 +79,9 @@ type State struct {
 	Threads     []*Thread `json:"threads"`
 	Queue       []Event   `json:"queue"`
 	Created     time.Time `json:"created"`
+	// Port and Token are the last viewer address. A restarted server uses them again, so an open tab reconnects.
+	Port  int    `json:"port,omitempty"`
+	Token string `json:"token,omitempty"`
 }
 
 // ServerInfo is written to server.json while a server runs.

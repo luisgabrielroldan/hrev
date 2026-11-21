@@ -16,8 +16,27 @@
     drag: null,      // {file, side, a, b}
     connected: true,
     error: '',
+    compact: false,  // true when the diff is scrolled: the header shows only the title and the send controls
+    treeW: loadTreeWidth(),
+    treeOpen: loadTreeOpen(),
   };
   let data = null;
+
+  // The width of the file list is a per-viewer convenience. Storage can be missing, so every access is guarded.
+  function loadTreeWidth() {
+    try { const w = parseInt(localStorage.getItem('reviewit.treeWidth'), 10); if (w > 0) return w; } catch (e) { /* no storage */ }
+    return 300;
+  }
+  function saveTreeWidth(w) {
+    try { localStorage.setItem('reviewit.treeWidth', String(w)); } catch (e) { /* no storage */ }
+  }
+  function loadTreeOpen() {
+    try { return localStorage.getItem('reviewit.treeOpen') !== 'false'; } catch (e) { return true; }
+  }
+  function saveTreeOpen(v) {
+    try { localStorage.setItem('reviewit.treeOpen', String(v)); } catch (e) { /* no storage */ }
+  }
+  const clampTreeWidth = (w) => Math.round(Math.max(180, Math.min(w, window.innerWidth * 0.6)));
   let errorTimer = null;
 
   // ---------- helpers ----------
@@ -115,6 +134,9 @@
   // ---------- icons ----------
 
   const icon = {
+    gear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    check: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>',
+    sidebar: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg>',
     chev: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>',
     search: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3.5 3.5"/></svg>',
     filter: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4h12M4.5 8h7M7 12h2"/></svg>',
@@ -142,15 +164,14 @@
     const active = document.activeElement;
     const focusId = active && active.id ? active.id : null;
     const caret = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
-    const pane = document.querySelector('.diffpane');
     const treeList = document.querySelector('.tree-list');
-    const scroll = [pane ? pane.scrollTop : 0, treeList ? treeList.scrollTop : 0];
+    const scroll = [window.scrollY, treeList ? treeList.scrollTop : 0];
 
-    app.innerHTML = headerHTML() + statusHTML() + `<div class="layout">${treeHTML()}${diffHTML()}</div>`;
+    app.innerHTML = `<div class="topbar">${headerHTML()}${statusHTML()}</div><div class="layout" style="--tree-w:${ui.treeW}px">${ui.treeOpen ? treeHTML() + '<div class="tree-resize" role="separator" aria-orientation="vertical" aria-label="Resize the file list" title="Drag to resize the file list" tabindex="0" data-resize></div>' : ''}${diffHTML()}</div>`;
 
-    const pane2 = document.querySelector('.diffpane');
     const tree2 = document.querySelector('.tree-list');
-    if (pane2) pane2.scrollTop = scroll[0];
+    watchTopbar();
+    window.scrollTo(0, scroll[0]);
     if (tree2) tree2.scrollTop = scroll[1];
     if (focusId) {
       const el = document.getElementById(focusId);
@@ -162,26 +183,41 @@
     document.title = (data.title || 'Review session') + ' · reviewit';
   }
 
+  // Full header: the title and the texts use the full width. Below a separator, a bar holds the file list button
+  // on the left and the pending count with the Send button on the right. When the page is scrolled, only the bar
+  // stays, and it shows the title.
   function headerHTML() {
     const n = data.pending;
-    return `<header class="header">
+    const title = esc(data.title || 'Review session');
+    const label = `${ui.treeOpen ? 'Hide' : 'Show'} the file list`;
+    return `<header class="header ${ui.compact ? 'compact' : ''}">
       <div class="header-main">
-        <h1>${esc(data.title || 'Review session')}</h1>
+        <h1>${title}</h1>
         ${data.description ? `<p class="desc">${esc(data.description)}</p>` : ''}
         ${data.source ? `<p class="source">Diff: <span class="mono">${esc(data.source)}</span></p>` : ''}
       </div>
-      <div class="header-actions">
+      <div class="header-bar">
+        <button class="iconbtn sm ${ui.treeOpen ? 'on' : ''}" type="button" data-action="toggle-tree" aria-pressed="${ui.treeOpen}" aria-label="${label}" title="${label}">${icon.sidebar}</button>
+        <span class="bar-title" aria-hidden="true">${title}</span>
+        <span class="spacer"></span>
         <span class="pending-count"><strong>${n}</strong> pending comment${n === 1 ? '' : 's'}</span>
         <button class="btn btn-primary" type="button" data-action="send" ${n === 0 ? 'disabled' : ''}>Send pending comments</button>
+        <div class="menu-wrap">
+          <button class="iconbtn sm" type="button" data-action="toggle-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Settings" title="Settings">${icon.gear}</button>
+          <div class="menu" role="menu" hidden>
+            <p class="menu-label">Layout</p>
+            ${['unified', 'split'].map((v) => `<button class="menu-item" type="button" role="menuitemradio" aria-checked="${ui.view === v}" data-action="view" data-view="${v}"><span class="menu-check">${ui.view === v ? icon.check : ''}</span>${v === 'unified' ? 'Unified' : 'Split'}</button>`).join('')}
+          </div>
+        </div>
       </div>
     </header>`;
   }
 
   function statusHTML() {
-    if (!ui.connected) return '<div class="status status-disconnected" role="status">Disconnected from reviewit. New comments cannot be saved.</div>';
+    if (!ui.connected) return '<div class="status status-disconnected" role="status">Reconnecting to reviewit… Your comments are safe. New comments can be saved when the connection returns.</div>';
     if (ui.error) return `<div class="status status-error" role="alert">${esc(ui.error)}</div>`;
     if (data.agent === 'working') return '<div class="status status-working" role="status">The agent is working on your comments</div>';
-    if (data.agent === 'idle') return '<div class="status status-idle" role="status">The agent is not listening. Your comments are saved, but the agent will not get them until it listens again.</div>';
+    if (data.agent === 'idle') return '<div class="status status-idle" role="status">The agent is not listening right now. Your comments are saved. The agent gets them when it listens again.</div>';
     return '';
   }
 
@@ -191,7 +227,7 @@
     return data.threads.filter((t) => t.file === path).length;
   }
 
-  function treeHTML() {
+  function treeRowsHTML() {
     const q = ui.filter.trim().toLowerCase();
     const files = data.files.filter((f) => (!q || f.path.toLowerCase().includes(q)) && (!ui.onlyThreads || threadCount(f.path) > 0));
     const root = { dirs: {}, files: [] };
@@ -217,29 +253,43 @@
       }
       for (const f of node.files.slice().sort((a, b) => a.path.localeCompare(b.path))) {
         const name = f.path.split('/').pop();
+        const n = threadCount(f.path);
+        const count = n ? `<span class="tcount" title="${n} thread${n === 1 ? '' : 's'}">${icon.comment}${n}</span>` : '';
         rows.push(`<button class="node ${ui.current === f.path ? 'on' : ''}" type="button" data-action="goto-file" data-path="${esc(f.path)}" style="padding-left:${8 + depth * 20}px">
-          <span class="chev"></span>${icon.file(f.status)}<span class="name">${esc(name)}</span></button>`);
+          <span class="chev"></span>${icon.file(f.status)}<span class="name">${esc(name)}</span>${count}</button>`);
       }
     };
     walk(root, 0);
+    return rows.join('') || '<p class="tree-empty">No files match.</p>';
+  }
+
+  function treeHTML() {
     return `<nav class="tree" aria-label="Changed files">
       <div class="tree-top">
         <label class="filter">${icon.search}<span class="sr">Filter files</span><input id="tree-filter" type="text" placeholder="Filter files…" value="${esc(ui.filter)}" data-input="filter"></label>
         <button class="iconbtn ${ui.onlyThreads ? 'on' : ''}" type="button" data-action="toggle-only-threads" aria-pressed="${ui.onlyThreads}" aria-label="Show only files with comments" title="Show only files with comments">${icon.filter}</button>
       </div>
-      <div class="tree-list">${rows.join('') || '<p class="tree-empty">No files match.</p>'}</div>
+      <div class="tree-list">${treeRowsHTML()}</div>
     </nav>`;
+  }
+
+  // The filter and the folders change only the tree. Redrawing only the tree keeps typing fast on a large diff.
+  function renderTree() {
+    const list = document.querySelector('.tree-list');
+    if (!list) return render();
+    list.innerHTML = treeRowsHTML();
+    const btn = document.querySelector('[data-action="toggle-only-threads"]');
+    if (btn) {
+      btn.classList.toggle('on', ui.onlyThreads);
+      btn.setAttribute('aria-pressed', String(ui.onlyThreads));
+    }
   }
 
   // ---------- diff ----------
 
   function diffHTML() {
-    const toolbar = `<div class="toolbar"><span class="label">View</span><div class="seg" role="group" aria-label="Diff view">
-      <button type="button" class="${ui.view === 'unified' ? 'on' : ''}" aria-pressed="${ui.view === 'unified'}" data-action="view" data-view="unified">Unified</button>
-      <button type="button" class="${ui.view === 'split' ? 'on' : ''}" aria-pressed="${ui.view === 'split'}" data-action="view" data-view="split">Split</button>
-    </div></div>`;
     const body = data.files.length ? data.files.map(fileHTML).join('') : '<div class="card empty-diff">No changes</div>';
-    return `<main class="diffpane" aria-label="Diff">${toolbar}${body}</main>`;
+    return `<main class="diffpane" aria-label="Diff">${body}</main>`;
   }
 
   function fileHTML(f) {
@@ -360,10 +410,25 @@
     return '';
   }
 
+  // A thread with a sent comment waits for the agent. When wait has delivered the comment, the agent is working on it.
+  function agentWork(t) {
+    const sent = t.comments.filter((c) => c.author === 'user' && c.state === 'sent');
+    if (!sent.length) return '';
+    return sent.some((c) => c.printed) ? 'working' : 'waiting';
+  }
+
+  function workHTML(t) {
+    const w = agentWork(t);
+    if (w === 'working') return '<div class="work" role="status"><span class="pulse"></span>The agent is working on this…</div>';
+    if (w === 'waiting') return '<div class="work" role="status">Waiting for the agent to pick this up</div>';
+    return '';
+  }
+
   function threadHTML(t) {
     const root = t.comments[0];
     const n = t.comments.length;
-    const label = t.resolved ? '<span class="badge b-resolved">Resolved</span>' : t.outdated ? '<span class="badge b-outdated">Outdated</span>' : '';
+    const work = agentWork(t) === 'working' ? '<span class="badge b-sent"><span class="pulse"></span>Agent working</span>' : '';
+    const label = (t.resolved ? '<span class="badge b-resolved">Resolved</span>' : t.outdated ? '<span class="badge b-outdated">Outdated</span>' : '') + work;
     if (!isExpanded(t)) {
       return `<div class="thread"><button class="collapsed" type="button" data-action="toggle-thread" data-id="${t.id}" aria-expanded="false">${label}<span class="sum">${esc(where(t))} · “${esc(firstLine(root.body))}” · ${n} message${n === 1 ? '' : 's'}</span><span class="spacer"></span><span>Show</span></button></div>`;
     }
@@ -379,6 +444,7 @@
       out += '</div>';
     }
     t.comments.forEach((c, i) => { out += messageHTML(t, c, i === 0); });
+    out += workHTML(t);
     if (t.resolved) {
       out += `<div class="composer"><div class="actions"><span class="meta">You resolved this conversation.</span><span class="spacer"></span><button class="btn btn-ghost" type="button" data-action="resolve" data-id="${t.id}" data-value="false">Unresolve</button></div></div>`;
     } else {
@@ -447,9 +513,11 @@
   const actions = {
     async send() { await api('/api/send', {}); },
     view(el) { ui.view = el.dataset.view; render(); },
+    'toggle-menu'(el) { setMenu(el.getAttribute('aria-expanded') !== 'true'); },
     'toggle-file'(el) { const p = el.dataset.path; ui.collapsed[p] = !ui.collapsed[p]; render(); },
-    'toggle-folder'(el) { const p = el.dataset.path; ui.folders[p] = ui.folders[p] === false; render(); },
-    'toggle-only-threads'() { ui.onlyThreads = !ui.onlyThreads; render(); },
+    'toggle-folder'(el) { const p = el.dataset.path; ui.folders[p] = ui.folders[p] === false; renderTree(); },
+    'toggle-tree'() { ui.treeOpen = !ui.treeOpen; saveTreeOpen(ui.treeOpen); render(); },
+    'toggle-only-threads'() { ui.onlyThreads = !ui.onlyThreads; renderTree(); },
     'goto-file'(el) {
       const p = el.dataset.path;
       ui.current = p;
@@ -515,7 +583,18 @@
     },
   };
 
+  // The settings menu opens and closes without a full render, so it stays fast on a large diff.
+  function setMenu(open) {
+    const btn = document.querySelector('[data-action="toggle-menu"]');
+    const menu = document.querySelector('.menu');
+    if (!btn || !menu) return;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('on', open);
+    menu.hidden = !open;
+  }
+
   document.addEventListener('click', async (e) => {
+    if (!e.target.closest('.menu-wrap')) setMenu(false);
     const el = e.target.closest('[data-action]');
     if (!el || el.disabled) return;
     const fn = actions[el.dataset.action];
@@ -533,7 +612,7 @@
       case 'draft': if (ui.drafts[el.dataset.key]) ui.drafts[el.dataset.key].text = el.value; break;
       case 'reply': ui.replies[el.dataset.id] = el.value; break;
       case 'edit': ui.editing[el.dataset.id] = el.value; break;
-      case 'filter': ui.filter = el.value; render(); break;
+      case 'filter': ui.filter = el.value; renderTree(); break;
     }
   });
 
@@ -554,6 +633,62 @@
     if (!el || el.dataset.file !== ui.drag.file || el.dataset.side !== ui.drag.side) return;
     const line = Number(el.dataset.line);
     if (line !== ui.drag.b) { ui.drag.b = line; render(); }
+  });
+
+  // Resize the file list by dragging the handle, or with the arrow keys when the handle has focus.
+  function setTreeWidth(w, save) {
+    ui.treeW = clampTreeWidth(w);
+    const layout = document.querySelector('.layout');
+    if (layout) layout.style.setProperty('--tree-w', ui.treeW + 'px');
+    if (save) saveTreeWidth(ui.treeW);
+  }
+  document.addEventListener('pointerdown', (e) => {
+    const h = e.target.closest('[data-resize]');
+    if (!h) return;
+    e.preventDefault();
+    h.setPointerCapture(e.pointerId);
+    h.classList.add('active');
+    const left = document.querySelector('.layout').getBoundingClientRect().left;
+    const move = (ev) => setTreeWidth(ev.clientX - left, false);
+    const up = () => {
+      h.removeEventListener('pointermove', move);
+      h.removeEventListener('pointerup', up);
+      h.classList.remove('active');
+      saveTreeWidth(ui.treeW);
+    };
+    h.addEventListener('pointermove', move);
+    h.addEventListener('pointerup', up);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setMenu(false);
+    if (!e.target.closest || !e.target.closest('[data-resize]')) return;
+    if (e.key === 'ArrowLeft') { setTreeWidth(ui.treeW - 16, true); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { setTreeWidth(ui.treeW + 16, true); e.preventDefault(); }
+  });
+
+  // The page has 1 scroll. The top bar (header and status) sticks to the top. The file tree and the file
+  // headers stick below it, so the CSS needs the current height of the top bar in --top-h.
+  const topbarObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver((entries) => {
+      for (const en of entries) document.documentElement.style.setProperty('--top-h', en.target.offsetHeight + 'px');
+    })
+    : null;
+  function watchTopbar() {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    document.documentElement.style.setProperty('--top-h', bar.offsetHeight + 'px');
+    if (topbarObserver) { topbarObserver.disconnect(); topbarObserver.observe(bar); }
+  }
+
+  // Compact header: after 24px of page scroll the header shows only the title and the send controls.
+  // It becomes full size again at the top.
+  window.addEventListener('scroll', () => {
+    const top = window.scrollY;
+    const compact = ui.compact ? top > 0 : top > 24;
+    if (compact === ui.compact) return;
+    ui.compact = compact;
+    const header = document.querySelector('.header');
+    if (header) header.classList.toggle('compact', compact);
   });
 
   document.addEventListener('mouseup', () => {

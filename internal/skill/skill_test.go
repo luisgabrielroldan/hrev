@@ -16,7 +16,7 @@ func TestInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An existing stub needs --force.
-	if _, err := Install(dir, false); !errors.Is(err, ErrExists) {
+	if _, err := Install(dir, false); !errors.Is(err, ErrInstalled) {
 		t.Fatalf("second install without force: %v", err)
 	}
 	// --force replaces the folder content.

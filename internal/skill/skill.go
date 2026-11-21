@@ -34,12 +34,14 @@ description: Open a local code review of a diff in the browser with reviewit, th
 Run ` + "`reviewit skill`" + ` and follow its output. The reviewit binary prints the current instructions, so they always match the installed version.
 `
 
-// ErrExists means that the skill is already installed and --force was not given.
-var ErrExists = errors.New("already installed")
+// ErrInstalled means that the skill is already installed and --force was not given.
+var ErrInstalled = errors.New("already installed")
 
 // Install writes the stub to <dir>/reviewit/SKILL.md and returns the path of the folder.
 // An existing folder is replaced only when it holds the marker and force is true.
 func Install(dir string, force bool) (string, error) {
+	// The shell expands ~ and ~user before reviewit gets the path. This only handles a quoted path such as
+	// "~/.claude/skills". ~user/ is not handled: installing into another user's home is not a use case.
 	if strings.HasPrefix(dir, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -54,7 +56,7 @@ func Install(dir string, force bool) (string, error) {
 			return target, fmt.Errorf("%s exists and reviewit did not create it; nothing changed", target)
 		}
 		if !force {
-			return target, fmt.Errorf("the skill is %w at %s; run again with --force to replace it", ErrExists, target)
+			return target, fmt.Errorf("the skill is %w at %s; run again with --force to replace it", ErrInstalled, target)
 		}
 		if err := os.RemoveAll(target); err != nil {
 			return target, err
