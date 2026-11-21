@@ -1,0 +1,1 @@
+The UI build (ui/build.mjs) writes index.html here. "make build" runs it before go build.

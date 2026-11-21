@@ -82,7 +82,7 @@ func Parse(input string) ([]*File, error) {
 	}
 	start := func() {
 		finish()
-		cur = &File{Status: Modified}
+		cur = &File{Status: Modified, Hunks: []Hunk{}}
 		hunk = nil
 	}
 
@@ -181,7 +181,7 @@ func Parse(input string) ([]*File, error) {
 				return nil, fmt.Errorf("line %d: %v", i+1, err)
 			}
 			oldN, oldLeft, newN, newLeft = os, oc, ns, nc
-			cur.Hunks = append(cur.Hunks, Hunk{Header: l})
+			cur.Hunks = append(cur.Hunks, Hunk{Header: l, Lines: []Line{}})
 			hunk = &cur.Hunks[len(cur.Hunks)-1]
 		default:
 			// index, mode, similarity and other header lines are ignored.
@@ -196,7 +196,7 @@ func Parse(input string) ([]*File, error) {
 
 func ensure(cur **File) {
 	if *cur == nil {
-		*cur = &File{Status: Modified}
+		*cur = &File{Status: Modified, Hunks: []Hunk{}}
 	}
 }
 

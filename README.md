@@ -15,13 +15,15 @@ The agent learns all of this from the hrev skill.
 
 ## Install
 
-You need Go 1.24 or later.
+You need Go 1.24 or later and Node.js 22.18 or later.
 
 ```sh
 git clone <repository-url> hrev
 cd hrev
-go build -o ~/.local/bin/hrev .
+make build BIN=~/.local/bin/hrev
 ```
+
+`make build` builds the viewer first and then the Go binary, which embeds the viewer. A plain `go build` without the viewer build gives a binary that shows only a message in the browser.
 
 Put `hrev` in a folder on your `PATH`. Then install the skill for your agent:
 
@@ -53,6 +55,16 @@ hrev skill install <dir> [--force]
 ```
 
 The agent runs these commands. You do not need them for a normal review. [SPEC.md](SPEC.md) describes the full behavior.
+
+## Development
+
+The viewer is a TypeScript app in `ui/`, built with Preact and esbuild. The build writes 1 HTML file with inline CSS and JavaScript to `internal/web/dist/index.html`, and the Go binary embeds that file.
+
+```sh
+make build   # build the viewer, then the binary
+make test    # type check and test the viewer, then go vet and go test
+make ui      # build only the viewer
+```
 
 ## Security
 

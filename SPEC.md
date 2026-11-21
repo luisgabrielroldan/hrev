@@ -297,7 +297,7 @@ The state is saved in `<dir>/<id>/`, where `<dir>` is the `--dir` folder of `ope
 ## 10. Technology
 
 - Go, to produce 1 binary.
-- The viewer files are inside the binary, with the Go `embed` package.
+- The viewer is a TypeScript app in `ui/`, with Preact. esbuild bundles the viewer into 1 HTML file with inline CSS and JavaScript. The build runs before the Go build, and the binary holds the HTML file with the Go `embed` package.
 - Syntax highlighting: the server colors the diff with the Chroma library (`github.com/alecthomas/chroma/v2`). The file name selects the language. The server colors the old side and the new side of each hunk as whole blocks. A file with an unknown language shows plain text. A string or comment that starts above a hunk can show the wrong color.
 - Long lines wrap in the diff.
 - All code and all text in the application are in English.

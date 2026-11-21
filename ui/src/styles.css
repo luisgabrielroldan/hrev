@@ -34,7 +34,10 @@ button{font:inherit}
 .pending-count{font-size:13px;color:var(--soft)}
 .pending-count strong{color:var(--text)}
 .status{padding:8px 24px;font-size:13px;border-bottom:1px solid var(--border)}
-.status-working{background:var(--sentbg);color:var(--sentt)}
+.status-working{background:var(--sentbg);color:var(--sentt);position:relative;overflow:hidden}
+/* While the agent works, a short bar moves along the bottom edge of the status, as an indeterminate progress bar. */
+.status-working::after{content:"";position:absolute;left:0;bottom:0;width:30%;height:2px;background:var(--sentt);animation:working 1.6s ease-in-out infinite}
+@keyframes working{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
 .status-idle{background:var(--warnbg);color:var(--warnt)}
 .status-disconnected,.status-error{background:var(--errbg);color:var(--errt)}
 .layout{display:flex;align-items:flex-start}
@@ -151,7 +154,7 @@ button{font:inherit}
 .pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sentt);margin-right:6px;vertical-align:middle;animation:pulse 1.2s ease-in-out infinite}
 .work .pulse{margin-right:0}
 @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
-@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}.status-working::after{animation:none;width:100%;opacity:.5}}
 .b-outdated{background:var(--outbg);color:var(--outt)}
 .b-resolved{background:var(--resbg);color:var(--rest)}
 .msg-actions{display:flex;gap:4px;margin-top:6px}
@@ -193,3 +196,4 @@ button{font:inherit}
 .tslot{padding-left:16px}
 .filehead{position:static}
 }
+.folder-ic{color:var(--muted);flex:0 0 18px}

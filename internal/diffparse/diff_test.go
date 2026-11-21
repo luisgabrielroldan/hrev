@@ -1,6 +1,10 @@
 package diffparse
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 const sample = `diff --git a/src/a.go b/src/a.go
 index 1111111..2222222 100644
@@ -59,6 +63,10 @@ func TestParse(t *testing.T) {
 		if f.Path != w.path || f.OldPath != w.old || f.Status != w.status || f.Binary != w.binary || f.Adds != w.adds || f.Dels != w.dels {
 			t.Errorf("file %d = %+v, want %+v", i, *f, w)
 		}
+	}
+	// A file without changed lines, such as a pure rename, has an empty hunk list in JSON, not null.
+	if b, _ := json.Marshal(files[3]); !strings.Contains(string(b), `"hunks":[]`) {
+		t.Errorf("rename JSON = %s, want \"hunks\":[]", b)
 	}
 	// Line numbers: the empty context line counts on both sides.
 	lines := files[0].Hunks[0].Lines
