@@ -1,0 +1,124 @@
+package server
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+	"time"
+
+	"reviewit/internal/diffparse"
+	"reviewit/internal/store"
+)
+
+const testDiff = `diff --git a/a.go b/a.go
+--- a/a.go
++++ b/a.go
+@@ -1,2 +1,3 @@
+ package a
++var x = 1
+ var y = 2
+`
+
+func newTestServer(t *testing.T) (*Server, *httptest.Server) {
+	t.Setenv("REVIEWIT_HOME", t.TempDir())
+	files, err := diffparse.Parse(testDiff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &store.State{ID: "s1", Rev: 1, Threads: []*store.Thread{}}
+	dir, _ := store.Dir("s1")
+	if err := mkdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	s := New(st, files, "tok")
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	return s, ts
+}
+
+func post(t *testing.T, ts *httptest.Server, path string, body any, out any) int {
+	t.Helper()
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", ts.URL+path, bytes.NewReader(b))
+	req.Header.Set("X-Reviewit-Token", "tok")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if out != nil {
+		json.NewDecoder(resp.Body).Decode(out)
+	}
+	return resp.StatusCode
+}
+
+func comment(t *testing.T, ts *httptest.Server, body, action string) string {
+	t.Helper()
+	var res map[string]string
+	code := post(t, ts, "/api/comments", map[string]any{"file": "a.go", "side": "new", "start_line": 2, "end_line": 2, "body": body, "action": action}, &res)
+	if code != 200 {
+		t.Fatalf("create comment: status %d", code)
+	}
+	return res["thread_id"]
+}
+
+// The full event cycle: queue between waits, delivery in bulk, replaced wait, reply, unhandled.
+func TestEventCycle(t *testing.T) {
+	s, ts := newTestServer(t)
+
+	// A request without the token is rejected.
+	resp, _ := http.Post(ts.URL+"/api/send", "application/json", nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("no token: status %d", resp.StatusCode)
+	}
+
+	// 2 events arrive while no wait is active: the next wait gets both at once.
+	t1 := comment(t, ts, "first", "ask")
+	comment(t, ts, "second", "save")
+	post(t, ts, "/api/send", struct{}{}, nil)
+	var res WaitResult
+	post(t, ts, "/cli/wait", struct{}{}, &res)
+	if len(res.Events) != 2 || res.Events[0].Type != "ask_now" || res.Events[1].Type != "send" || len(res.Threads) != 2 {
+		t.Fatalf("wait result: %+v", res)
+	}
+	if got := s.st.Unhandled(); len(got) != 2 {
+		t.Fatalf("unhandled = %v, want 2 comments", got)
+	}
+
+	// A newer wait replaces the older one; an event goes to the newer wait.
+	first := make(chan WaitResult, 1)
+	go func() { var r WaitResult; post(t, ts, "/cli/wait", struct{}{}, &r); first <- r }()
+	waitFor(t, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.waiter != nil })
+	second := make(chan WaitResult, 1)
+	go func() { var r WaitResult; post(t, ts, "/cli/wait", struct{}{}, &r); second <- r }()
+	if r := <-first; r.Message != "replaced" {
+		t.Fatalf("older wait: %+v", r)
+	}
+	comment(t, ts, "third", "ask")
+	if r := <-second; len(r.Events) != 1 {
+		t.Fatalf("newer wait: %+v", r)
+	}
+
+	// A reply answers the sent comments of its thread.
+	post(t, ts, "/cli/reply", map[string]string{"thread_id": t1, "body": "done"}, nil)
+	_, c := s.st.Comment(t1)
+	if c.State != store.Answered {
+		t.Fatalf("state after reply = %s", c.State)
+	}
+}
+
+func mkdir(d string) error { return os.MkdirAll(d, 0o700) }
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("condition not met")
+}
