@@ -19,6 +19,8 @@
     compact: false,  // true when the diff is scrolled: the header shows only the title and the send controls
     treeW: loadTreeWidth(),
     treeOpen: loadTreeOpen(),
+    preview: {},     // editor id -> true when the Preview tab is open
+    replyOpen: {},   // thread id -> true when its reply editor is open
   };
   let data = null;
 
@@ -134,6 +136,10 @@
   // ---------- icons ----------
 
   const icon = {
+    // Speech bubble icons for the 2 comment buttons: with a bolt for Ask now (sent at once), empty for Comment (saved as pending).
+    askNow: '<svg class="btn-ic" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/><path d="M8.95 3.2 5.9 7.05h2l-.85 3.15 3.1-3.95H8.1Z"/></svg>',
+    saveComment: '<svg class="btn-ic" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>',
+    suggest: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 1.75C1 .784 1.784 0 2.75 0h7.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16H2.75A1.75 1.75 0 0 1 1 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V4.664a.25.25 0 0 0-.073-.177l-2.914-2.914a.25.25 0 0 0-.177-.073ZM8 3.25a.75.75 0 0 1 .75.75v1.5h1.5a.75.75 0 0 1 0 1.5h-1.5v1.5a.75.75 0 0 1-1.5 0V7h-1.5a.75.75 0 0 1 0-1.5h1.5V4A.75.75 0 0 1 8 3.25Zm-3 8a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z"/></svg>',
     gear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     check: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>',
     sidebar: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg>',
@@ -143,16 +149,17 @@
     comment: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 3.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5v-2.5h-.5a1 1 0 0 1-1-1z"/></svg>',
     folderOpen: '<svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" style="color:var(--muted);flex:0 0 18px"><path d="M1.5 3.5a1 1 0 0 1 1-1h3.6l1.4 1.5h5a1 1 0 0 1 1 1v1.5h-8.2a1 1 0 0 0-.95.68L1.5 12.5z" fill="currentColor"/><path d="M4.3 7.2a1 1 0 0 1 .95-.7h9.4a.6.6 0 0 1 .57.8l-1.8 5.5a1 1 0 0 1-.95.7H1.9z" fill="currentColor" opacity=".75"/></svg>',
     folderClosed: '<svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" style="color:var(--muted);flex:0 0 18px"><path d="M1.5 3.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="currentColor"/></svg>',
+    // File icons: the sheet of the suggestion icon. A modified file shows the same plus and minus as that icon.
     file(status) {
-      const doc = '<path d="M3.5 1.5h6l3 3v10h-9z"/>';
+      const sheet = 'M1 1.75C1 .784 1.784 0 2.75 0h7.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16H2.75A1.75 1.75 0 0 1 1 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V4.664a.25.25 0 0 0-.073-.177l-2.914-2.914a.25.25 0 0 0-.177-.073Z';
       const map = {
-        added: ['var(--plus)', 'Added file', '<path d="M8 7v5M5.5 9.5h5"/>'],
-        deleted: ['var(--minus)', 'Deleted file', '<path d="M5.5 9.5h5"/>'],
-        renamed: ['var(--muted)', 'Renamed file', '<path d="M5.5 9.5h5M8.5 7.5l2 2-2 2"/>'],
-        modified: ['var(--muted)', 'Modified file', '<circle cx="8" cy="9.5" r="1.6" fill="currentColor"/>'],
+        added: ['var(--plus)', 'Added file', 'M8 5.5a.75.75 0 0 1 .75.75v1.5h1.5a.75.75 0 0 1 0 1.5h-1.5v1.5a.75.75 0 0 1-1.5 0v-1.5h-1.5a.75.75 0 0 1 0-1.5h1.5v-1.5A.75.75 0 0 1 8 5.5Z'],
+        deleted: ['var(--minus)', 'Deleted file', 'M5 8.5a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 8.5Z'],
+        renamed: ['var(--muted)', 'Renamed file', 'M5 8.5a.75.75 0 0 1 .75-.75h3.19l-.97-.97a.75.75 0 0 1 1.06-1.06l2.25 2.25a.75.75 0 0 1 0 1.06l-2.25 2.25a.75.75 0 0 1-1.06-1.06l.97-.97H5.75A.75.75 0 0 1 5 8.5Z'],
+        modified: ['var(--muted)', 'Modified file', 'M8 3.25a.75.75 0 0 1 .75.75v1.5h1.5a.75.75 0 0 1 0 1.5h-1.5v1.5a.75.75 0 0 1-1.5 0V7h-1.5a.75.75 0 0 1 0-1.5h1.5V4A.75.75 0 0 1 8 3.25Zm-3 8a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z'],
       };
       const [color, label, mark] = map[status] || map.modified;
-      return `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" role="img" aria-label="${label}" style="color:${color};flex:0 0 18px">${doc}${mark}</svg>`;
+      return `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="${label}" style="color:${color};flex:0 0 16px"><path d="${sheet}"/><path d="${mark}"/></svg>`;
     },
   };
 
@@ -164,6 +171,7 @@
     const active = document.activeElement;
     const focusId = active && active.id ? active.id : null;
     const caret = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+    addBtn.hidden = true;
     const treeList = document.querySelector('.tree-list');
     const scroll = [window.scrollY, treeList ? treeList.scrollTop : 0];
 
@@ -194,14 +202,14 @@
       <div class="header-main">
         <h1>${title}</h1>
         ${data.description ? `<p class="desc">${esc(data.description)}</p>` : ''}
-        ${data.source ? `<p class="source">Diff: <span class="mono">${esc(data.source)}</span></p>` : ''}
+        ${data.source || data.diff_time ? `<p class="source">${data.source ? `Diff: <span class="mono">${esc(data.source)}</span>` : 'Diff'}${diffAgeHTML()}</p>` : ''}
       </div>
       <div class="header-bar">
         <button class="iconbtn sm ${ui.treeOpen ? 'on' : ''}" type="button" data-action="toggle-tree" aria-pressed="${ui.treeOpen}" aria-label="${label}" title="${label}">${icon.sidebar}</button>
         <span class="bar-title" aria-hidden="true">${title}</span>
         <span class="spacer"></span>
         <span class="pending-count"><strong>${n}</strong> pending comment${n === 1 ? '' : 's'}</span>
-        <button class="btn btn-primary" type="button" data-action="send" ${n === 0 ? 'disabled' : ''}>Send pending comments</button>
+        <button class="btn btn-primary" type="button" data-action="send" ${n === 0 ? 'disabled' : ''}>Send comments</button>
         <div class="menu-wrap">
           <button class="iconbtn sm" type="button" data-action="toggle-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Settings" title="Settings">${icon.gear}</button>
           <div class="menu" role="menu" hidden>
@@ -212,6 +220,25 @@
       </div>
     </header>`;
   }
+
+  // The age of the diff: the agent must run refresh after each code change, so an old diff is visible.
+  function ago(iso) {
+    const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+    if (s < 60) return 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h} h ago`;
+    return `${Math.round(h / 24)} d ago`;
+  }
+  function diffAgeHTML() {
+    if (!data.diff_time) return '';
+    return ` · <span class="diff-age" title="Last diff update: ${esc(new Date(data.diff_time).toLocaleString())}">updated ${ago(data.diff_time)}</span>`;
+  }
+  setInterval(() => {
+    const el = document.querySelector('.diff-age');
+    if (el && data && data.diff_time) el.textContent = `updated ${ago(data.diff_time)}`;
+  }, 30000);
 
   function statusHTML() {
     if (!ui.connected) return '<div class="status status-disconnected" role="status">Reconnecting to reviewit… Your comments are safe. New comments can be saved when the connection returns.</div>';
@@ -284,6 +311,188 @@
       btn.setAttribute('aria-pressed', String(ui.onlyThreads));
     }
   }
+
+
+  // ---------- markdown ----------
+  // A small Markdown renderer for comments. The text is escaped first, so a comment can never inject HTML.
+  // Images render only from the session attachments; links open only http and https addresses.
+
+  function mdInline(text) {
+    const codes = [];
+    let t = String(text).replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+    t = esc(t);
+    t = t.replace(/!\[([^\]]*)\]\((attachments\/[0-9a-f]{16}\.(?:png|jpg|gif|webp))\)/g,
+      (m, alt, src) => `<a href="/api/${src}?t=${encodeURIComponent(token)}" target="_blank" rel="noopener"><img class="md-img" alt="${alt}" src="/api/${src}?t=${encodeURIComponent(token)}"></a>`);
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1<em>$2</em>').replace(/(^|[^_\w])_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
+    t = t.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+    return t.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${esc(codes[Number(i)])}</code>`);
+  }
+
+  function md(src) {
+    const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+    const out = [];
+    let para = [];
+    const flush = () => { if (para.length) { out.push(`<p>${para.map(mdInline).join('<br>')}</p>`); para = []; } };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const fence = line.match(/^\s*```\s*([\w+-]*)\s*$/);
+      if (fence) {
+        flush();
+        const code = [];
+        for (i++; i < lines.length && !/^\s*```\s*$/.test(lines[i]); i++) code.push(lines[i]);
+        const body = esc(code.join('\n'));
+        out.push(fence[1] === 'suggestion'
+          ? `<div class="suggestion"><div class="suggestion-head">Suggested change</div><pre><code>${body || ' '}</code></pre></div>`
+          : `<pre class="md-code"><code>${body}</code></pre>`);
+        continue;
+      }
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { flush(); out.push(`<p class="md-h md-h${h[1].length}">${mdInline(h[2])}</p>`); continue; }
+      if (/^\s*>/.test(line)) {
+        flush();
+        const q = [];
+        for (; i < lines.length && /^\s*>/.test(lines[i]); i++) q.push(lines[i].replace(/^\s*>\s?/, ''));
+        i--;
+        out.push(`<blockquote>${md(q.join('\n'))}</blockquote>`);
+        continue;
+      }
+      const li = line.match(/^\s*([-*+]|\d+[.)])\s+(.*)$/);
+      if (li) {
+        flush();
+        const ordered = /\d/.test(li[1]);
+        const items = [];
+        for (; i < lines.length; i++) {
+          const m = lines[i].match(/^\s*([-*+]|\d+[.)])\s+(.*)$/);
+          if (!m || /\d/.test(m[1]) !== ordered) break;
+          const task = m[2].match(/^\[([ xX])\]\s+(.*)$/);
+          items.push(task ? `<li class="md-task"><input type="checkbox" disabled ${task[1] === ' ' ? '' : 'checked'}> ${mdInline(task[2])}</li>` : `<li>${mdInline(m[2])}</li>`);
+        }
+        i--;
+        out.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`);
+        continue;
+      }
+      if (!line.trim()) { flush(); continue; }
+      para.push(line);
+    }
+    flush();
+    return out.join('');
+  }
+
+  // ---------- comment editor ----------
+  // 1 editor for new comments, replies and edits: Write and Preview tabs, a suggestion button, and image paste.
+  // input names the state field ('draft', 'reply' or 'edit'); ref is the draft key, thread id or comment id.
+  function editorHTML({ id, input, ref, value, placeholder, label, small, suggest }) {
+    const preview = !!ui.preview[id];
+    const refAttr = input === 'draft' ? `data-key="${esc(ref)}"` : `data-id="${esc(ref)}"`;
+    return `<div class="editor ${preview ? 'previewing' : ''}" data-editor="${id}">
+      <div class="editor-bar" role="tablist">
+        <button type="button" role="tab" class="editor-tab ${preview ? '' : 'on'}" aria-selected="${!preview}" data-action="editor-tab" data-editor="${id}" data-tab="write">Write</button>
+        <button type="button" role="tab" class="editor-tab ${preview ? 'on' : ''}" aria-selected="${preview}" data-action="editor-tab" data-editor="${id}" data-tab="preview">Preview</button>
+        <span class="spacer"></span>
+        ${suggest ? `<button type="button" class="editor-tool" data-action="suggest" data-editor="${id}" title="Add a suggestion: the code that should replace the selected lines" aria-label="Add a suggestion">${icon.suggest}</button>` : ''}
+        ${FORMATS.map((f) => `<button type="button" class="editor-tool" data-action="format" data-format="${f.name}" data-editor="${id}" title="${f.label}" aria-label="${f.label}">${f.icon}</button>`).join('')}
+      </div>
+      <label class="sr" for="${id}">${esc(label)}</label>
+      <textarea id="${id}" class="ta ${small ? 'small' : ''}" placeholder="${esc(placeholder)}" data-input="${input}" ${refAttr} ${preview ? 'hidden' : ''}>${esc(value)}</textarea>
+      <div class="md editor-preview" ${preview ? '' : 'hidden'}>${preview ? (md(value) || '<p class="muted">Nothing to preview</p>') : ''}</div>
+      <p class="editor-hint">Markdown is supported. Paste an image to attach it.</p>
+    </div>`;
+  }
+
+  // Toolbar formats, as on GitHub. Each one wraps the selected text, or inserts a sample text and selects it.
+  const svg = (d) => `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const FORMATS = [
+    { name: 'heading', label: 'Heading', icon: svg('<path d="M4 3v10M12 3v10M4 8h8"/>'), line: '### ' },
+    { name: 'bold', label: 'Bold', icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2h4.5a3.501 3.501 0 0 1 2.852 5.53A3.499 3.499 0 0 1 9.5 14H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm1 7v3h4.5a1.5 1.5 0 0 0 0-3Zm3.5-2a1.5 1.5 0 0 0 0-3H5v3Z"/></svg>`, wrap: ['**', '**'], sample: 'bold text' },
+    { name: 'italic', label: 'Italic', icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6 2.75A.75.75 0 0 1 6.75 2h6.5a.75.75 0 0 1 0 1.5h-2.505l-3.858 9H9.25a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5h2.505l3.858-9H6.75A.75.75 0 0 1 6 2.75Z"/></svg>`, wrap: ['_', '_'], sample: 'italic text' },
+    { name: 'quote', label: 'Quote', icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.75 2.5h10.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Zm4 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2.5 7.75v6a.75.75 0 0 1-1.5 0v-6a.75.75 0 0 1 1.5 0Z"/></svg>`, line: '> ' },
+    { name: 'code', label: 'Code', icon: svg('<path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5"/>'), wrap: ['`', '`'], block: true, sample: 'code' },
+    { name: 'link', label: 'Link', icon: svg('<path d="M7 9a3 3 0 0 0 4.2.2l2-2a3 3 0 0 0-4.2-4.2l-1 1M9 7a3 3 0 0 0-4.2-.2l-2 2A3 3 0 0 0 7 13l1-1"/>'), link: true },
+  ];
+
+  function applyFormat(ta, f) {
+    const a = ta.selectionStart ?? ta.value.length;
+    const b = ta.selectionEnd ?? a;
+    const sel = ta.value.slice(a, b);
+    let text, selStart, selEnd;
+    if (f.line) {
+      // Line formats prefix each selected line, or the current line when nothing is selected.
+      const ls = ta.value.lastIndexOf('\n', a - 1) + 1;
+      const le = b > a && ta.value[b - 1] === '\n' ? b - 1 : (ta.value.indexOf('\n', b) === -1 ? ta.value.length : ta.value.indexOf('\n', b));
+      const block = ta.value.slice(ls, le).split('\n').map((l) => f.line + l).join('\n');
+      ta.value = ta.value.slice(0, ls) + block + ta.value.slice(le);
+      // Without a selection, the caret goes right after the prefix; with one, to the end of the changed lines.
+      ta.selectionStart = ta.selectionEnd = a === b ? a + f.line.length : ls + block.length;
+    } else {
+      if (f.link) { text = `[${sel || 'text'}](url)`; selStart = a + text.length - 4; selEnd = a + text.length - 1; }
+      else if (f.block && sel.includes('\n')) { text = '```\n' + sel + '\n```'; selStart = a + 4; selEnd = selStart + sel.length; }
+      else { const inner = sel || f.sample; text = f.wrap[0] + inner + f.wrap[1]; selStart = a + f.wrap[0].length; selEnd = selStart + inner.length; }
+      ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+      ta.selectionStart = selStart; ta.selectionEnd = selEnd;
+    }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.focus();
+  }
+
+  // The selected code of a draft, reply or edit, for a suggestion block. A file comment has no selected code.
+  function selectedCodeFor(ta) {
+    if (ta.dataset.input === 'draft') {
+      const d = ui.drafts[ta.dataset.key];
+      return d && d.side !== 'file' ? d.sel.join('\n') : null;
+    }
+    const tid = ta.dataset.input === 'reply' ? ta.dataset.id : (data.threads.find((t) => t.comments.some((c) => c.id === ta.dataset.id)) || {}).id;
+    const t = data.threads.find((x) => x.id === tid);
+    return t && t.side !== 'file' ? (t.selected_text || '') : null;
+  }
+
+  // insertText puts text at the caret and updates the state through the normal input event.
+  function insertText(ta, text) {
+    const a = ta.selectionStart ?? ta.value.length;
+    const b = ta.selectionEnd ?? a;
+    ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+    ta.selectionStart = ta.selectionEnd = a + text.length;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.focus();
+  }
+
+  function setEditorTab(id, tab) {
+    const box = document.querySelector(`.editor[data-editor="${id}"]`);
+    if (!box) return;
+    const ta = box.querySelector('textarea');
+    const pv = box.querySelector('.editor-preview');
+    const preview = tab === 'preview';
+    if (preview) ui.preview[id] = true; else delete ui.preview[id];
+    box.classList.toggle('previewing', preview);
+    box.querySelectorAll('.editor-tab').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    ta.hidden = preview;
+    pv.hidden = !preview;
+    if (preview) pv.innerHTML = md(ta.value) || '<p class="muted">Nothing to preview</p>';
+    else ta.focus();
+  }
+
+  // A pasted image is stored by the server; the comment gets a Markdown image link to it.
+  document.addEventListener('paste', async (e) => {
+    const ta = e.target;
+    if (!ta.matches || !ta.matches('.editor textarea')) return;
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((x) => x.kind === 'file' && /^image\/(png|jpeg|gif|webp)$/.test(x.type));
+    if (!item) return;
+    e.preventDefault();
+    const file = item.getAsFile();
+    const mark = '![Uploading image…]()';
+    insertText(ta, mark);
+    try {
+      const r = await fetch('/api/attachments', { method: 'POST', headers: { 'X-Reviewit-Token': token, 'Content-Type': file.type }, body: file });
+      if (!r.ok) throw new Error((await r.text()).trim() || r.statusText);
+      const res = await r.json();
+      ta.value = ta.value.replace(mark, res.markdown);
+    } catch (err) {
+      ta.value = ta.value.replace(mark, '');
+      showError(`Could not attach the image: ${err.message}`);
+    }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 
   // ---------- diff ----------
 
@@ -449,16 +658,23 @@
       out += `<div class="composer"><div class="actions"><span class="meta">You resolved this conversation.</span><span class="spacer"></span><button class="btn btn-ghost" type="button" data-action="resolve" data-id="${t.id}" data-value="false">Unresolve</button></div></div>`;
     } else {
       const rid = 'reply-' + idFor(t.id);
-      out += `<div class="composer">
-        <label class="sr" for="${rid}">Reply to this thread</label>
-        <textarea id="${rid}" class="ta small" placeholder="Reply…" data-input="reply" data-id="${t.id}">${esc(ui.replies[t.id] || '')}</textarea>
-        <div class="actions">
-          <button class="btn btn-primary" type="button" data-action="reply" data-mode="ask" data-id="${t.id}">Ask now</button>
-          <button class="btn" type="button" data-action="reply" data-mode="save" data-id="${t.id}">Save comment</button>
-          <span class="spacer"></span>
+      if (ui.replyOpen[t.id] || ui.replies[t.id]) {
+        out += `<div class="composer">
+          ${editorHTML({ id: rid, input: 'reply', ref: t.id, value: ui.replies[t.id] || '', placeholder: 'Reply…', label: 'Reply to this thread', small: true, suggest: t.side !== 'file' })}
+          <div class="actions">
+            <span class="spacer"></span>
+            <button class="btn" type="button" data-action="reply-cancel" data-id="${t.id}">Cancel</button>
+            <button class="btn" type="button" data-action="reply" data-mode="save" data-id="${t.id}">${icon.saveComment}Comment</button>
+            <button class="btn btn-primary" type="button" data-action="reply" data-mode="ask" data-id="${t.id}">${icon.askNow}Ask now</button>
+          </div>
+        </div>`;
+      } else {
+        // A closed reply box: 1 field that opens the editor, as on GitHub.
+        out += `<div class="composer composer-closed">
+          <button class="reply-open" type="button" data-action="reply-open" data-id="${t.id}">Reply…</button>
           <button class="btn btn-ghost" type="button" data-action="resolve" data-id="${t.id}" data-value="true">Resolve</button>
-        </div>
-      </div>`;
+        </div>`;
+      }
     }
     return out + '</div>';
   }
@@ -468,10 +684,10 @@
     let body;
     if (c.id in ui.editing) {
       const eid = 'edit-' + idFor(c.id);
-      body = `<label class="sr" for="${eid}">Edit comment</label><textarea id="${eid}" class="ta small" data-input="edit" data-id="${c.id}">${esc(ui.editing[c.id])}</textarea>
+      body = editorHTML({ id: eid, input: 'edit', ref: c.id, value: ui.editing[c.id], placeholder: '', label: 'Edit comment', small: true, suggest: t.side !== 'file' }) + `
         <div class="msg-actions"><button class="btn btn-primary btn-small" type="button" data-action="edit-save" data-id="${c.id}">Save</button><button class="btn btn-ghost btn-small" type="button" data-action="edit-cancel" data-id="${c.id}">Cancel</button></div>`;
     } else {
-      body = `<p class="body">${esc(c.body)}</p>`;
+      body = `<div class="body md">${md(c.body)}</div>`;
       if (user && c.state === 'pending') {
         body += `<div class="msg-actions"><button class="btn btn-ghost btn-small" type="button" data-action="edit" data-id="${c.id}">Edit</button><button class="btn btn-ghost btn-small" type="button" data-action="delete" data-id="${c.id}">Delete</button></div>`;
       }
@@ -490,13 +706,12 @@
     const w = d.side === 'file' ? 'File comment' : where({ side: d.side, start_line: d.start, end_line: d.end });
     return `<div class="thread draft"><div class="composer">
       <div class="meta"><span class="who">New comment</span><span>${esc(w)}</span></div>
-      <label class="sr" for="${did}">New comment</label>
-      <textarea id="${did}" class="ta" placeholder="Ask a question or describe a change" data-input="draft" data-key="${esc(key)}">${esc(d.text)}</textarea>
+      ${editorHTML({ id: did, input: 'draft', ref: key, value: d.text, placeholder: 'Ask a question or describe a change', label: 'New comment', suggest: d.side !== 'file' })}
       <div class="actions">
-        <button class="btn btn-primary" type="button" data-action="draft" data-mode="ask" data-key="${esc(key)}">Ask now</button>
-        <button class="btn" type="button" data-action="draft" data-mode="save" data-key="${esc(key)}">Save comment</button>
         <span class="spacer"></span>
-        <button class="btn btn-ghost" type="button" data-action="draft-cancel" data-key="${esc(key)}">Cancel</button>
+        <button class="btn" type="button" data-action="draft-cancel" data-key="${esc(key)}">Cancel</button>
+        <button class="btn" type="button" data-action="draft" data-mode="save" data-key="${esc(key)}">${icon.saveComment}Comment</button>
+        <button class="btn btn-primary" type="button" data-action="draft" data-mode="ask" data-key="${esc(key)}">${icon.askNow}Ask now</button>
       </div>
     </div></div>`;
   }
@@ -513,6 +728,31 @@
   const actions = {
     async send() { await api('/api/send', {}); },
     view(el) { ui.view = el.dataset.view; render(); },
+    'reply-open'(el) { ui.replyOpen[el.dataset.id] = true; render(); focusLater('reply-' + idFor(el.dataset.id)); },
+    'reply-cancel'(el) {
+      const id = el.dataset.id;
+      delete ui.replyOpen[id];
+      delete ui.replies[id];
+      delete ui.preview['reply-' + idFor(id)];
+      render();
+    },
+    'editor-tab'(el) { setEditorTab(el.dataset.editor, el.dataset.tab); },
+    suggest(el) {
+      const ta = document.getElementById(el.dataset.editor);
+      if (!ta) return;
+      if (ui.preview[ta.id]) setEditorTab(ta.id, 'write');
+      const code = selectedCodeFor(ta);
+      if (code === null) return;
+      const before = ta.value && !ta.value.endsWith('\n') && ta.selectionStart === ta.value.length ? '\n' : '';
+      insertText(ta, `${before}\`\`\`suggestion\n${code}\n\`\`\`\n`);
+    },
+    format(el) {
+      const ta = document.getElementById(el.dataset.editor);
+      const f = FORMATS.find((x) => x.name === el.dataset.format);
+      if (!ta || !f) return;
+      if (ui.preview[ta.id]) setEditorTab(ta.id, 'write');
+      applyFormat(ta, f);
+    },
     'toggle-menu'(el) { setMenu(el.getAttribute('aria-expanded') !== 'true'); },
     'toggle-file'(el) { const p = el.dataset.path; ui.collapsed[p] = !ui.collapsed[p]; render(); },
     'toggle-folder'(el) { const p = el.dataset.path; ui.folders[p] = ui.folders[p] === false; renderTree(); },
@@ -550,6 +790,8 @@
       if (!text.trim()) { showError('The reply is empty.'); return; }
       await api('/api/comments', { thread_id: id, body: text, action: el.dataset.mode });
       delete ui.replies[id];
+      delete ui.replyOpen[id];
+      delete ui.preview['reply-' + idFor(id)];
       await load();
     },
     async resolve(el) {
@@ -617,22 +859,115 @@
   });
 
   // ---------- line selection ----------
+  // A drag on the line numbers, or from the blue + button, selects lines. During the drag only the row classes
+  // change, so a large diff stays fast. The comment panel opens on mouseup.
+
+  // lineAt returns the line number cell under the pointer: on the given side, or on the new side first.
+  function lineAt(target, side) {
+    if (!target.closest) return null;
+    const direct = target.closest('.num[data-line]');
+    if (direct && (!side || direct.dataset.side === side)) return direct;
+    const box = target.closest('.side') || target.closest('.row');
+    if (!box || !box.closest('.diffpane')) return null;
+    if (side) return box.querySelector(`.num[data-line][data-side="${side}"]`);
+    return box.querySelector('.num[data-line][data-side="new"]') || box.querySelector('.num[data-line][data-side="old"]');
+  }
+
+  function startDrag(file, side, line) {
+    ui.drag = { file, side, a: line, b: line };
+    const num = document.querySelector(`.num[data-line="${line}"][data-side="${side}"][data-file="${CSS.escape(file)}"]`);
+    moveButton(anchorBtn, num);
+    paintDrag();
+  }
+
+  function paintDrag() {
+    document.querySelectorAll('.drag-sel').forEach((el) => el.classList.remove('drag-sel', 'sel'));
+    const d = ui.drag;
+    if (!d) return;
+    const lo = Math.min(d.a, d.b);
+    const hi = Math.max(d.a, d.b);
+    document.querySelectorAll(`.num[data-line][data-side="${d.side}"]`).forEach((n) => {
+      const line = Number(n.dataset.line);
+      if (n.dataset.file !== d.file || line < lo || line > hi) return;
+      const box = n.closest('.side') || n.closest('.row');
+      if (box && !box.classList.contains('sel')) box.classList.add('sel', 'drag-sel');
+    });
+  }
+
+  // The blue + button: 1 element outside the app, placed on the row under the pointer.
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'add-comment';
+  addBtn.setAttribute('aria-label', 'Comment on this line; drag to select more lines');
+  addBtn.title = 'Comment on this line. Drag to select more lines.';
+  addBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="pointer-events:none"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  addBtn.hidden = true;
+  document.body.appendChild(addBtn);
+
+  // The button sits on the edge between the line number and the +/− sign, as on GitHub. During a drag, a second
+  // button stays on the first line of the range.
+  const anchorBtn = addBtn.cloneNode(true);
+  anchorBtn.classList.add('anchor');
+  anchorBtn.setAttribute('aria-hidden', 'true');
+  anchorBtn.removeAttribute('title');
+  document.body.appendChild(anchorBtn);
+  // A vertical line in the button color joins the 2 buttons during a drag.
+  const dragLine = document.createElement('div');
+  dragLine.className = 'drag-line';
+  dragLine.hidden = true;
+  document.body.appendChild(dragLine);
+
+  function placeDragLine() {
+    if (anchorBtn.hidden || addBtn.hidden) { dragLine.hidden = true; return; }
+    const a = parseFloat(anchorBtn.style.top);
+    const b = parseFloat(addBtn.style.top);
+    dragLine.style.left = (parseFloat(anchorBtn.style.left) + 10) + 'px';
+    dragLine.style.top = (Math.min(a, b) + 11) + 'px';
+    dragLine.style.height = Math.abs(a - b) + 'px';
+    dragLine.hidden = a === b;
+  }
+
+  function moveButton(btn, num) {
+    const box = num && (num.closest('.side') || num.closest('.row'));
+    const sign = box && box.querySelector(':scope > .sign');
+    if (!sign) { btn.hidden = true; return false; }
+    const r = sign.getBoundingClientRect();
+    // Centered on the edge between the line number and the sign, as on GitHub; it covers part of the sign.
+    btn.style.top = (r.top + window.scrollY) + 'px';
+    btn.style.left = (r.left + window.scrollX - 11) + 'px';
+    btn.hidden = false;
+    return true;
+  }
+
+  function placeAddButton(num) {
+    if (!moveButton(addBtn, num)) return;
+    addBtn.dataset.file = num.dataset.file;
+    addBtn.dataset.side = num.dataset.side;
+    addBtn.dataset.line = num.dataset.line;
+  }
 
   document.addEventListener('mousedown', (e) => {
-    const el = e.target.closest('.num[data-line]');
-    if (!el || e.button !== 0) return;
+    if (e.button !== 0) return;
+    if (addBtn.contains(e.target)) {
+      e.preventDefault();
+      startDrag(addBtn.dataset.file, addBtn.dataset.side, Number(addBtn.dataset.line));
+      return;
+    }
+    const el = e.target.closest && e.target.closest('.num[data-line]');
+    if (!el) return;
     e.preventDefault();
-    const line = Number(el.dataset.line);
-    ui.drag = { file: el.dataset.file, side: el.dataset.side, a: line, b: line };
-    render();
+    startDrag(el.dataset.file, el.dataset.side, Number(el.dataset.line));
   });
 
   document.addEventListener('mouseover', (e) => {
-    if (!ui.drag) return;
-    const el = e.target.closest('.num[data-line]');
-    if (!el || el.dataset.file !== ui.drag.file || el.dataset.side !== ui.drag.side) return;
+    if (addBtn.contains(e.target)) return;
+    if (!ui.drag) { placeAddButton(lineAt(e.target)); return; }
+    const el = lineAt(e.target, ui.drag.side);
+    if (!el || el.dataset.file !== ui.drag.file) return;
+    moveButton(addBtn, el);
+    placeDragLine();
     const line = Number(el.dataset.line);
-    if (line !== ui.drag.b) { ui.drag.b = line; render(); }
+    if (line !== ui.drag.b) { ui.drag.b = line; paintDrag(); }
   });
 
   // Resize the file list by dragging the handle, or with the arrow keys when the handle has focus.
@@ -695,6 +1030,9 @@
     const d = ui.drag;
     if (!d) return;
     ui.drag = null;
+    addBtn.hidden = true;
+    anchorBtn.hidden = true;
+    dragLine.hidden = true;
     const f = findFile(d.file);
     if (!f) { render(); return; }
     const lines = selectionLines(f, d.side, Math.min(d.a, d.b), Math.max(d.a, d.b));
@@ -714,6 +1052,11 @@
     es.addEventListener('update', () => {
       ui.connected = true;
       load().catch(() => { ui.connected = false; render(); });
+    });
+    // The session was replaced by a new one: load the new session in this tab. Only a local address is accepted.
+    es.addEventListener('replaced', (e) => {
+      es.close();
+      if (/^http:\/\/127\.0\.0\.1:\d+\/\?t=[0-9a-f]+$/.test(e.data)) location.replace(e.data);
     });
     es.onerror = () => {
       ui.connected = false;

@@ -25,7 +25,7 @@ import (
 const usage = `reviewit: review a diff in the browser, together with an agent.
 
 Usage:
-  reviewit open <file.diff> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
+  reviewit open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
   reviewit open --resume <id>
   reviewit refresh <id> <file.diff> [--title T] [--description D] [--source CMD]
   reviewit show <id>
@@ -36,6 +36,7 @@ Usage:
   reviewit skill install <dir> [--force]       (writes a stub skill to <dir>/reviewit)
 
 "open" keeps running: it is the server of the review session. Run it in the background.
+"--dir" is the folder for the session data, such as the agent scratchpad (not the project).
 "wait" prints all queued events as JSON and exits.
 `
 
@@ -138,7 +139,7 @@ func needPos(a args, n int, form string) error {
 // ---------- open ----------
 
 func cmdOpen(argv []string) error {
-	a, err := parseArgs(argv, []string{"title", "description", "source", "replace", "resume"}, []string{"force"})
+	a, err := parseArgs(argv, []string{"dir", "title", "description", "source", "replace", "resume"}, []string{"force"})
 	if err != nil {
 		return err
 	}
@@ -148,8 +149,12 @@ func cmdOpen(argv []string) error {
 		}
 		return resume(id)
 	}
-	if err := needPos(a, 1, "open <file.diff> [--title T] [--description D] [--source CMD] [--replace ID [--force]]"); err != nil {
+	if err := needPos(a, 1, "open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]"); err != nil {
 		return err
+	}
+	base := a.flags["dir"]
+	if base == "" {
+		return errors.New("open needs --dir <folder>: the folder for the session data, such as your scratchpad. Use a folder outside the project that you can read without permission prompts")
 	}
 	diffText, files, err := readDiff(a.pos[0])
 	if err != nil {
@@ -168,11 +173,7 @@ func cmdOpen(argv []string) error {
 
 	store.Cleanup(7 * 24 * time.Hour)
 	id := store.NewID()
-	dir, err := store.Dir(id)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if _, err := store.Create(id, base); err != nil {
 		return err
 	}
 	lock, err := store.Lock(id)
@@ -248,7 +249,7 @@ func run(st *store.State, files []*diffparse.File, replace string) error {
 		return err
 	}
 	if replace != "" {
-		stopServer(replace, st.ID)
+		stopServer(replace, st.ID, srv.URL())
 	}
 	srv.StartStatusTimer()
 
@@ -260,8 +261,9 @@ func run(st *store.State, files []*diffparse.File, replace string) error {
 	}()
 
 	fmt.Printf("id: %s\nurl: %s\n", st.ID, srv.URL())
-	if resumed {
-		// An open tab reconnects by itself to the same address. Open a tab only when none comes back.
+	if resumed || replace != "" {
+		// After a resume, an open tab reconnects by itself to the same address. After a replace, the old
+		// server sends its open tabs to the new address. Open a tab only when none arrives.
 		srv.OpenIfNoViewer(4 * time.Second)
 	} else {
 		openBrowser(srv.URL())
@@ -280,13 +282,13 @@ func run(st *store.State, files []*diffparse.File, replace string) error {
 }
 
 // stopServer asks the server of an old session to stop. Errors are ignored: the old server may not run.
-func stopServer(oldID, newID string) {
+func stopServer(oldID, newID, newURL string) {
 	si, err := store.ReadServer(oldID)
 	if err != nil {
 		return
 	}
 	c := &client{id: oldID, si: si}
-	c.do("POST", "/cli/stop", map[string]string{"replaced_by": newID}, nil, 2*time.Second)
+	c.do("POST", "/cli/stop", map[string]string{"replaced_by": newID, "url": newURL}, nil, 2*time.Second)
 }
 
 func readDiff(path string) (string, []*diffparse.File, error) {

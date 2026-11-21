@@ -56,6 +56,7 @@ type Server struct {
 	httpServer *http.Server
 	listener   net.Listener
 	OpenURL    func(url string) // opens the browser
+	movedTo    string           // viewer URL of the session that replaced this one
 }
 
 // New creates a server for a loaded state and its diff.
@@ -133,6 +134,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/comments/{id}/delete", s.handleDeleteComment)
 	mux.HandleFunc("POST /api/threads/{id}/resolve", s.handleResolve)
 	mux.HandleFunc("POST /api/send", s.handleSend)
+	mux.HandleFunc("POST /api/attachments", s.handleUpload)
+	mux.HandleFunc("GET /api/attachments/{name}", s.handleAttachment)
 	mux.HandleFunc("GET /cli/ping", s.handlePing)
 	mux.HandleFunc("GET /cli/state", s.handleCLIState)
 	mux.HandleFunc("POST /cli/wait", s.handleWait)
@@ -180,6 +183,7 @@ func (s *Server) handleViewState(w http.ResponseWriter, r *http.Request) {
 		"title":       s.st.Title,
 		"description": s.st.Description,
 		"source":      s.st.Source,
+		"diff_time":   diffTime(s.st.ID),
 		"rev":         s.st.Rev,
 		"files":       s.files,
 		"threads":     threads,
@@ -214,6 +218,14 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ch:
+			s.mu.Lock()
+			moved := s.movedTo
+			s.mu.Unlock()
+			if moved != "" {
+				fmt.Fprintf(w, "event: replaced\ndata: %s\n\n", moved)
+				flusher.Flush()
+				return
+			}
 			fmt.Fprint(w, "event: update\ndata: {}\n\n")
 			flusher.Flush()
 		case <-ping.C:
@@ -441,6 +453,8 @@ type OutComment struct {
 	Author string `json:"author"`
 	Body   string `json:"body"`
 	State  string `json:"state,omitempty"`
+	// Images are the local paths of the images that the user pasted into this comment.
+	Images []string `json:"images,omitempty"`
 }
 
 // OutThread is a thread in the output of wait and state.
@@ -456,14 +470,23 @@ type OutThread struct {
 	Comments     []OutComment `json:"comments"`
 }
 
-func outThread(t *store.Thread) OutThread {
+// diffTime is the time of the last diff update in RFC 3339, or "" when it is unknown.
+func diffTime(id string) string {
+	t, err := store.DiffTime(id)
+	if err != nil {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+func outThread(id string, t *store.Thread) OutThread {
 	o := OutThread{ID: t.ID, File: t.File, Side: t.Side, Outdated: t.Outdated, Resolved: t.Resolved, Comments: []OutComment{}}
 	if t.Side != store.SideFile {
 		start, end, text := t.StartLine, t.EndLine, t.SelectedText
 		o.StartLine, o.EndLine, o.SelectedText = &start, &end, &text
 	}
 	for _, c := range t.Comments {
-		o.Comments = append(o.Comments, OutComment{ID: c.ID, Author: c.Author, Body: c.Body, State: c.State})
+		o.Comments = append(o.Comments, OutComment{ID: c.ID, Author: c.Author, Body: c.Body, State: c.State, Images: imagePaths(id, c.Body)})
 	}
 	return o
 }
@@ -473,7 +496,7 @@ func (s *Server) handleCLIState(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	threads := []OutThread{}
 	for _, t := range s.st.Threads {
-		threads = append(threads, outThread(t))
+		threads = append(threads, outThread(s.st.ID, t))
 	}
 	writeJSON(w, map[string]any{
 		"id":          s.st.ID,
@@ -538,7 +561,7 @@ func (s *Server) takeQueueLocked() WaitResult {
 			c.Printed = true
 			if !seen[t.ID] {
 				seen[t.ID] = true
-				res.Threads = append(res.Threads, outThread(t))
+				res.Threads = append(res.Threads, outThread(s.st.ID, t))
 			}
 		}
 	}
@@ -663,11 +686,17 @@ func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ReplacedBy string `json:"replaced_by"`
+		URL        string `json:"url"`
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
 	writeJSON(w, map[string]bool{"stopping": true})
+	// Open tabs load the new session in place. Stop waits a moment before shutdown, so the event gets out.
+	s.mu.Lock()
+	s.movedTo = req.URL
+	s.broadcastLocked()
+	s.mu.Unlock()
 	s.Stop(req.ReplacedBy)
 }
 

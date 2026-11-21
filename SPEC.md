@@ -20,8 +20,8 @@ Design rule: keep every mechanism simple and intuitive. Prefer 1 clear rule over
 | Thread | A root comment and all replies to it, from the user and from the agent. The id of the root comment is the thread id. |
 | Comment | A text that the user writes. A root comment is on a selection of lines or on a whole file. A reply is inside a thread. A comment is an instruction or a question. |
 | Ask now | A button that sends a comment to the agent immediately. |
-| Save comment | A button that saves a comment as pending. |
-| Send | A button that sends all pending comments to the agent at once. Send does not approve or reject. The review session stays open. |
+| Comment | A button that saves a comment as pending. |
+| Send comments | A button that sends all pending comments to the agent at once. Send does not approve or reject. The review session stays open. |
 | Event | A message from the viewer to the agent. Only Ask now and Send create events. |
 | Outdated | The state of a thread whose code is not in the current diff. |
 | Resolved | The state of a thread that the user closed. |
@@ -44,10 +44,10 @@ The header counter counts only pending comments.
 2. The agent decides which diff to show, writes it to a file, and runs `reviewit open` in the background.
 3. The viewer opens in the default browser.
 4. The user selects lines, or uses the file comment button, and writes a comment.
-5. The user clicks Ask now or Save comment.
+5. The user clicks Ask now or Comment.
 6. With Ask now, the agent gets the event, changes the code if the comment asks for a change, refreshes the diff, and replies in the thread.
-7. With Save comment, the comment becomes pending. The user can add more comments.
-8. The user clicks Send. The agent gets all pending comments, changes the code, refreshes the diff, and replies in each thread.
+7. With Comment, the comment becomes pending. The user can add more comments.
+8. The user clicks Send comments. The agent gets all pending comments, changes the code, refreshes the diff, and replies in each thread.
 9. The review session stays open. The user can continue to comment on the new diff.
 
 While the review is open, the agent is free. The user can also talk to the agent in the terminal. When the agent is busy with a terminal request, events wait in the queue until the agent finishes.
@@ -58,7 +58,7 @@ While the review is open, the agent is free. The user can also talk to the agent
 - A review session does not end in an explicit way. It stays as saved state until the automatic cleanup removes it.
 - A new review session starts with no comments, also for the same diff.
 - The agent can read the complete state of the review session at any time.
-- Ask now and Send create events. Save comment, Edit, Delete, Resolve and Unresolve change the state but create no event.
+- Ask now and Send create events. Comment, Edit, Delete, Resolve and Unresolve change the state but create no event.
 - Closing the viewer window does not end the review session. The agent can open the window again.
 - Comments stay in the review session when the diff changes.
 
@@ -70,7 +70,8 @@ All text in the viewer is in English. The viewer uses a dark theme only.
 
 - A header at the top shows the title, the description and the diff source, with the full width. Below a separator line, a bar shows the file tree button on the left, and the number of pending comments and the Send button on the right.
 - The title, the description and the diff source come from the agent (`--title`, `--description`, `--source`).
-- The Send button is disabled when there are 0 pending comments.
+- After the diff source, the header shows the age of the diff, such as "updated 3 min ago". The age comes from the modification time of `diff.patch` in the session folder, which `open` and `refresh` write. The text updates every 30 seconds. Its tooltip shows the exact time.
+- The Send comments button is disabled when there are 0 pending comments.
 - When the page is scrolled, only the bar stays visible, and it also shows the title. At the top of the page, the full header returns.
 - Below the header, a file tree is on the left and the diff is on the right.
 - The page has 1 scroll, and the diff scrolls with the page. The header stays at the top. The file tree stays beside the diff, below the header, and has its own scroll. File headers stay below the header while their file is visible.
@@ -100,9 +101,14 @@ All text in the viewer is in English. The viewer uses a dark theme only.
 
 ### 5.4 Comments
 
+- Comments are Markdown: paragraphs, headings, bold, italic, strikethrough, inline code, code blocks, lists, task lists, quotes, links (http and https only) and images (session attachments only). The viewer escapes all text before it renders Markdown.
+- Each comment box (new comment, reply, edit) has Write and Preview tabs, and a toolbar: suggestion, heading, bold, italic, quote, code and link. A format button wraps the selected text, or inserts a sample text and selects it.
+- On a line comment, a suggestion button inserts a ```` ```suggestion ```` block with the selected lines. The viewer shows the block as "Suggested change". The agent replaces the selected lines with the code of the block.
+- A pasted image (PNG, JPEG, GIF or WebP, at most 10 MB) is stored in `attachments/` in the session folder. The comment gets the text `![image](attachments/<name>)`. The viewer shows the image, also after a reload. In the output of `wait` and `state`, each comment has `images`: the local paths of its images, so the agent can read them.
+- When the pointer is over a diff line, a blue + button appears on the edge between the line number and the +/− sign, and covers part of the sign. A click on the button opens a comment panel for that line. A drag from the button, or from a line number, selects a range of lines on the same side. During the drag, a second button stays on the first line, and a vertical line in the same color joins the 2 buttons. Selected lines are amber with a blue left edge.
 - The user selects lines in the diff: added, removed or context lines. A comment panel opens under the selected lines. In the split view, the panel and the thread show under the side of the lines.
 - The file comment button opens the same comment panel under the file header.
-- The comment panel has 3 buttons: Ask now, Save comment and Cancel.
+- The comment panel has 3 buttons on the right, in this order: Cancel, Comment (an empty speech bubble) and Ask now (a speech bubble with a lightning bolt).
 - A reply box in a thread has the same buttons.
 - Ask now on a reply also sends the pending comments of the same thread.
 - A pending comment has Edit and Delete buttons.
@@ -146,7 +152,7 @@ Each thread with a sent comment also shows its own status under the last message
 ## 6. Command line interface
 
 ```
-reviewit open <file.diff> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
+reviewit open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
 reviewit open --resume <id>
 reviewit refresh <id> <file.diff> [--title T] [--description D] [--source CMD]
 reviewit show <id>
@@ -157,8 +163,8 @@ reviewit reply <id> <thread-id> [<text>]
 
 | Command | Behavior |
 |---|---|
-| `open <file.diff>` | Creates a review session, copies the diff file into the session folder, starts the server in the same process, opens the default browser, and prints the id and the URL. The process keeps running. The agent runs it in the background. |
-| `open --replace ID` | Same as `open`. Before it creates anything, it checks session ID. If session ID has pending or sent comments, the command fails and prints the number of those comments. `--force` allows the replacement in that case. After the start, the new server tells the server of session ID to stop. If that server is not running, nothing else happens. |
+| `open <file.diff> --dir <folder>` | Creates a review session in `<folder>/<id>/`. `--dir` is required. The agent passes its scratchpad, so it can read the session files (such as pasted images) without permission prompts, and nothing goes into the project. The command copies the diff file into the session folder, starts the server in the same process, opens the default browser, and prints the id and the URL. The process keeps running. The agent runs it in the background. |
+| `open --replace ID` | Same as `open`. Before it creates anything, it checks session ID. If session ID has pending or sent comments, the command fails and prints the number of those comments. `--force` allows the replacement in that case. After the start, the new server tells the server of session ID to stop, and gives it the new viewer URL. The old server sends that URL to its open viewer tabs, and each tab loads the new session in place. If no tab connects to the new server within 4 seconds, the command opens the browser. If the old server is not running, nothing else happens. |
 | `open --resume <id>` | Starts the server again on the saved state of a review session, with the same port and token as before. An open viewer tab reconnects by itself and shows the current state. If no tab connects within 4 seconds, the command opens the browser. If the saved port is in use, the server uses a new port. If the server of that id is already running, it fails and prints the URL of the running server. |
 | `refresh` | Copies a new diff file into the session folder, places the threads again (section 5.6), and updates the viewer. An option that is not given keeps its previous value. |
 | `show` | Opens the browser if no viewer tab is connected. Otherwise it does nothing. |
@@ -246,7 +252,7 @@ A `<thread>`:
 
 ### 8.2 Session folder
 
-The state is saved in `~/.reviewit/<id>/`. The folder contains:
+The state is saved in `<dir>/<id>/`, where `<dir>` is the `--dir` folder of `open`. `~/.reviewit/<id>.path` holds the path of that folder, so every other command needs only the id. An older session without a pointer file is the folder `~/.reviewit/<id>/`. The session folder contains:
 
 - the state of the review session;
 - the copy of the current diff file;
@@ -259,7 +265,7 @@ The state is saved in `~/.reviewit/<id>/`. The folder contains:
 - **Finding the server:** a command reads the port and the token from `server.json`. The server answers each request with its session id. If the connection fails or the id is different, the command gives the "not running" message.
 - **One server for each session:** the server holds a lock on the lock file while it runs. The operating system releases the lock when the process ends, also after a crash. A second server cannot start on an id whose lock is held.
 - **Access:** the URL of the viewer contains a random token. The server rejects every request without the correct token. Reason: a comment is an instruction to an agent that changes code, and a hostile web page in the same browser must not be able to send one.
-- **Cleanup:** `reviewit open` starts with a cleanup step. The cleanup removes a session folder when its last file change is older than 7 days and its lock is not held. Other commands do not run the cleanup.
+- **Cleanup:** `reviewit open` starts with a cleanup step. The cleanup removes a session folder and its pointer file when its last file change is older than 7 days and its lock is not held. It also removes a pointer file whose folder no longer exists, for example after a scratchpad cleanup. Other commands do not run the cleanup.
 
 ## 9. Agent workflow (for the skill)
 

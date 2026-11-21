@@ -3,9 +3,11 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,4 +123,74 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("condition not met")
+}
+
+// When a new session replaces this one, an open viewer tab gets the new address.
+func TestReplacedTabMoves(t *testing.T) {
+	_, ts := newTestServer(t)
+	resp, err := http.Get(ts.URL + "/api/events?t=tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	post(t, ts, "/cli/stop", map[string]string{"replaced_by": "s2", "url": "http://127.0.0.1:1/?t=ab"}, nil)
+	b, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(b), "event: replaced\ndata: http://127.0.0.1:1/?t=ab\n") {
+		t.Fatalf("stream: %q", b)
+	}
+}
+
+// A pasted image is stored, served again to the viewer, and listed for the agent as a local file.
+func TestAttachment(t *testing.T) {
+	_, ts := newTestServer(t)
+	png := []byte("\x89PNG\r\n\x1a\nfake")
+	req, _ := http.NewRequest("POST", ts.URL+"/api/attachments", bytes.NewReader(png))
+	req.Header.Set("X-Reviewit-Token", "tok")
+	req.Header.Set("Content-Type", "image/png")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var up map[string]string
+	json.NewDecoder(resp.Body).Decode(&up)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || up["markdown"] != "![image](attachments/"+up["name"]+")" {
+		t.Fatalf("upload: %d %v", resp.StatusCode, up)
+	}
+	resp, _ = http.Get(ts.URL + "/api/attachments/" + up["name"] + "?t=tok")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !bytes.Equal(b, png) || resp.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("download: %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	comment(t, ts, "See "+up["markdown"], "ask")
+	var res WaitResult
+	post(t, ts, "/cli/wait", struct{}{}, &res)
+	imgs := res.Threads[0].Comments[0].Images
+	if len(imgs) != 1 || !strings.HasSuffix(imgs[0], "/attachments/"+up["name"]) {
+		t.Fatalf("images for the agent: %v", imgs)
+	}
+	if _, err := os.Stat(imgs[0]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The viewer state carries the time of the last diff update, so the viewer can show how old the diff is.
+func TestDiffTime(t *testing.T) {
+	_, ts := newTestServer(t)
+	if err := store.WriteDiff("s1", testDiff); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Get(ts.URL + "/api/state?t=tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st struct {
+		DiffTime string `json:"diff_time"`
+	}
+	json.NewDecoder(resp.Body).Decode(&st)
+	resp.Body.Close()
+	if d, err := time.Parse(time.RFC3339, st.DiffTime); err != nil || time.Since(d) > time.Minute {
+		t.Fatalf("diff_time = %q", st.DiffTime)
+	}
 }

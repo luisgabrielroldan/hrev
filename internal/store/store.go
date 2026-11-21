@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -103,13 +104,49 @@ func Root() (string, error) {
 	return filepath.Join(home, ".reviewit"), nil
 }
 
-// Dir is the folder of one review session.
+// Dir is the folder of one review session. A session made with "open --dir" has a pointer file
+// <root>/<id>.path that holds its folder. An older session is the folder <root>/<id>.
 func Dir(id string) (string, error) {
+	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
+		return "", fmt.Errorf("%q is not a review session id", id)
+	}
 	root, err := Root()
 	if err != nil {
 		return "", err
 	}
+	if b, err := os.ReadFile(filepath.Join(root, id+".path")); err == nil {
+		return strings.TrimSpace(string(b)), nil
+	}
 	return filepath.Join(root, id), nil
+}
+
+// Create makes the folder of a new review session in base, and records it in the root folder. The agent passes
+// a folder that it can read without permission prompts, such as its scratchpad, so that it can open the images
+// of a comment.
+func Create(id, base string) (string, error) {
+	if strings.HasPrefix(base, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		base = filepath.Join(home, base[2:])
+	}
+	abs, err := filepath.Abs(base)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(abs, id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	root, err := Root()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", err
+	}
+	return dir, os.WriteFile(filepath.Join(root, id+".path"), []byte(dir+"\n"), 0o600)
 }
 
 // NewID returns a random id of 8 hex characters.
@@ -175,6 +212,19 @@ func WriteDiff(id, diff string) error {
 	return writeFile(filepath.Join(dir, "diff.patch"), []byte(diff), 0o600)
 }
 
+// DiffTime is the modification time of the diff copy: the time of open or of the last refresh.
+func DiffTime(id string) (time.Time, error) {
+	dir, err := Dir(id)
+	if err != nil {
+		return time.Time{}, err
+	}
+	info, err := os.Stat(filepath.Join(dir, "diff.patch"))
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
+}
+
 // ReadServer reads server.json.
 func ReadServer(id string) (*ServerInfo, error) {
 	dir, err := Dir(id)
@@ -235,10 +285,24 @@ func Cleanup(maxAge time.Duration) {
 		return
 	}
 	for _, e := range entries {
-		if !e.IsDir() {
+		var dir, pointer string
+		switch {
+		case e.IsDir():
+			dir = filepath.Join(root, e.Name())
+		case strings.HasSuffix(e.Name(), ".path"):
+			pointer = filepath.Join(root, e.Name())
+			b, err := os.ReadFile(pointer)
+			if err != nil {
+				continue
+			}
+			dir = strings.TrimSpace(string(b))
+			if _, err := os.Stat(dir); err != nil {
+				os.Remove(pointer) // the folder is gone, for example after a scratchpad cleanup
+				continue
+			}
+		default:
 			continue
 		}
-		dir := filepath.Join(root, e.Name())
 		if time.Since(lastChange(dir)) < maxAge {
 			continue
 		}
@@ -247,6 +311,9 @@ func Cleanup(maxAge time.Duration) {
 			continue
 		}
 		os.RemoveAll(dir)
+		if pointer != "" {
+			os.Remove(pointer)
+		}
 		f.Close()
 	}
 }
