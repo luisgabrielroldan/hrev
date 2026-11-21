@@ -6,7 +6,7 @@ hrev ("human review") is a local code review for coding agents. It shows a diff 
 
 1. You ask the agent for a review, for example "open a review of the last commit".
 2. The agent writes the diff to a file and runs `hrev open` in the background. Your browser opens the review.
-3. You write comments. Hover a line and click the **+** button to comment on it, or drag the button to select a range. Comments support Markdown, suggestion blocks and pasted images.
+3. You write comments. Hover a line and click the **+** button to comment on it, or drag the button to select a range. Comments support Markdown, suggestion blocks and pasted images. Unchanged code around each change is folded; click a fold to read more.
 4. You click **Send comments**, or **Ask now** on a single comment.
 5. The agent gets the comments, changes the code, refreshes the diff and replies in each thread.
 6. You read the replies and resolve the threads. Only you resolve threads.
@@ -18,7 +18,7 @@ The agent learns all of this from the hrev skill.
 You need Go 1.24 or later and Node.js 22.18 or later.
 
 ```sh
-git clone <repository-url> hrev
+git clone https://github.com/luisgabrielroldan/hrev.git
 cd hrev
 make build BIN=~/.local/bin/hrev
 ```

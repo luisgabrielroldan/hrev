@@ -16,10 +16,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"hrev/internal/diffparse"
-	"hrev/internal/highlight"
-	"hrev/internal/store"
-	"hrev/internal/web"
+	"github.com/luisgabrielroldan/hrev/internal/diffparse"
+	"github.com/luisgabrielroldan/hrev/internal/highlight"
+	"github.com/luisgabrielroldan/hrev/internal/store"
+	"github.com/luisgabrielroldan/hrev/internal/web"
 )
 
 // NotListeningDelay is how long no wait must be active before the viewer shows "not listening".

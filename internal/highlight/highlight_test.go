@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"hrev/internal/diffparse"
+	"github.com/luisgabrielroldan/hrev/internal/diffparse"
 )
 
 // A comment that spans lines keeps its color on every line, each side uses its own text,

@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 
-	"hrev/internal/diffparse"
+	"github.com/luisgabrielroldan/hrev/internal/diffparse"
 )
 
 // Files sets Line.HTML for every line of a file with a known language. Other lines keep only Text.

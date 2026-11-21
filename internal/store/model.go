@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"hrev/internal/diffparse"
+	"github.com/luisgabrielroldan/hrev/internal/diffparse"
 )
 
 // NextCommentID returns a new comment id, such as "c7".

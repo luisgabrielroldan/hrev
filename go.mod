@@ -1,4 +1,4 @@
-module hrev
+module github.com/luisgabrielroldan/hrev
 
 go 1.24.13
 

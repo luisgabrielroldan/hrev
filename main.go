@@ -17,10 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"hrev/internal/diffparse"
-	"hrev/internal/server"
-	"hrev/internal/skill"
-	"hrev/internal/store"
+	"github.com/luisgabrielroldan/hrev/internal/diffparse"
+	"github.com/luisgabrielroldan/hrev/internal/server"
+	"github.com/luisgabrielroldan/hrev/internal/skill"
+	"github.com/luisgabrielroldan/hrev/internal/store"
 )
 
 const usage = `hrev: review a diff in the browser, together with an agent.

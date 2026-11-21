@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"hrev/internal/diffparse"
-	"hrev/internal/store"
+	"github.com/luisgabrielroldan/hrev/internal/diffparse"
+	"github.com/luisgabrielroldan/hrev/internal/store"
 )
 
 const testDiff = `diff --git a/a.go b/a.go
