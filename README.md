@@ -2,6 +2,8 @@
 
 hrev ("human review") is a local code review for coding agents. It shows a diff in your browser like a pull request. You comment on lines or files, and the agent changes the code and replies in each thread. Nothing is pushed anywhere: the diff, the comments and the server stay on your machine.
 
+![A thread in hrev: the user asks a question on a line, and the agent replies after it changes the code](docs/thread.png)
+
 ## How it works
 
 1. You ask the agent for a review, for example "open a review of the last commit".
@@ -39,6 +41,8 @@ The skill is a small stub that tells the agent to run `hrev skill`. The full ins
 ## A second reviewer
 
 Another agent can review the same session. Click **Copy session** in the viewer and give the copied text to the other agent, for example "review hrev session 05546204". That agent adds comments with `hrev comment --author <name>`. Its comments stay pending until you send them.
+
+![A pending comment from a second reviewer agent, on a range of lines](docs/reviewer-comment.png)
 
 ## Commands
 
