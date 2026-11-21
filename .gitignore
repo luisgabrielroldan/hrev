@@ -2,3 +2,6 @@
 /ui/node_modules/
 /internal/web/dist/*
 !/internal/web/dist/README
+/ui/test-results/
+/ui/playwright-report/
+/.coverage/

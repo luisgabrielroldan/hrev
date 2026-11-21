@@ -6,15 +6,18 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'src/**/*.test.ts'",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@preact/signals": "^2.11.4",
     "preact": "^10.29.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
+    "monocart-coverage-reports": "^2.13.2",
     "typescript": "^5.9.3"
   }
 }

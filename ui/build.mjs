@@ -9,10 +9,15 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const outFile = join(here, '..', 'internal', 'web', 'dist', 'index.html');
 
+// HREV_COVERAGE=1 builds for coverage runs: not minified, with an inline source map, so that browser coverage
+// maps back to the TypeScript files.
+const coverage = !!process.env.HREV_COVERAGE;
+
 const result = await esbuild.build({
   entryPoints: [join(here, 'src', 'main.tsx')],
   bundle: true,
-  minify: true,
+  minify: !coverage,
+  sourcemap: coverage ? 'inline' : false,
   format: 'iife',
   target: 'es2022',
   jsx: 'automatic',

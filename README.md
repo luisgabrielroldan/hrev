@@ -63,8 +63,12 @@ The viewer is a TypeScript app in `ui/`, built with Preact and esbuild. The buil
 ```sh
 make build   # build the viewer, then the binary
 make test    # type check and test the viewer, then go vet and go test
+make e2e     # browser tests of the viewer against the real binary
+make coverage  # coverage of all tests together; the HTML report is in .coverage/js
 make ui      # build only the viewer
 ```
+
+`make e2e` uses the installed Google Chrome. Without Chrome, run `npx playwright install chromium` in `ui/` and set `PW_CHANNEL=` (empty).
 
 ## Security
 
