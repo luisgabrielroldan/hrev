@@ -303,9 +303,16 @@ func Cleanup(maxAge time.Duration) {
 		if err != nil {
 			continue
 		}
+		// Windows cannot remove an open file. The other files go first, while the lock is held, and the lock file last.
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			if e.Name() != "lock" {
+				os.RemoveAll(filepath.Join(dir, e.Name()))
+			}
+		}
+		f.Close()
 		os.RemoveAll(dir)
 		os.Remove(pointer)
-		f.Close()
 	}
 }
 

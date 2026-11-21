@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -164,7 +165,7 @@ func TestAttachment(t *testing.T) {
 	var res WaitResult
 	post(t, ts, "/cli/wait", struct{}{}, &res)
 	imgs := res.Threads[0].Comments[0].Images
-	if len(imgs) != 1 || !strings.HasSuffix(imgs[0], "/attachments/"+up["name"]) {
+	if len(imgs) != 1 || !strings.HasSuffix(imgs[0], string(filepath.Separator)+filepath.Join("attachments", up["name"])) {
 		t.Fatalf("images for the agent: %v", imgs)
 	}
 	if _, err := os.Stat(imgs[0]); err != nil {
