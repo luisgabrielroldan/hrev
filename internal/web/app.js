@@ -136,6 +136,7 @@
   // ---------- icons ----------
 
   const icon = {
+    copy: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>',
     // Speech bubble icons for the 2 comment buttons: with a bolt for Ask now (sent at once), empty for Comment (saved as pending).
     askNow: '<svg class="btn-ic" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/><path d="M8.95 3.2 5.9 7.05h2l-.85 3.15 3.1-3.95H8.1Z"/></svg>',
     saveComment: '<svg class="btn-ic" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>',
@@ -525,7 +526,7 @@
 
     return `<section class="card ${open ? 'open' : ''}" id="${fileId(f.path)}">
       <div class="filehead">
-        <h3 style="margin:0;min-width:0"><button class="filetoggle" type="button" data-action="toggle-file" data-path="${esc(f.path)}" aria-expanded="${open}"><span class="chev ${open ? '' : 'closed'}">${icon.chev}</span><span class="mono">${esc(title)}</span></button></h3>
+        <h3 class="filename"><button class="filetoggle" type="button" data-action="toggle-file" data-path="${esc(f.path)}" aria-expanded="${open}"><span class="chev ${open ? '' : 'closed'}">${icon.chev}</span><span class="mono">${esc(title)}</span></button></h3><button class="copybtn" type="button" data-action="copy-path" data-path="${esc(f.path)}" aria-label="Copy the file name" title="Copy the file name">${icon.copy}</button>
         <div class="filetools">
           ${note ? `<span class="note">${note}</span>` : ''}
           <span class="counter"><span class="plus">+${f.adds}</span> <span class="minus">−${f.dels}</span></span>
@@ -753,6 +754,13 @@
       if (ui.preview[ta.id]) setEditorTab(ta.id, 'write');
       applyFormat(ta, f);
     },
+    // Copy the file path; the icon shows a check mark for a moment.
+    async 'copy-path'(el) {
+      try { await navigator.clipboard.writeText(el.dataset.path); } catch (e) { showError('Could not copy the file name.'); return; }
+      el.innerHTML = icon.check;
+      el.classList.add('done');
+      setTimeout(() => { el.innerHTML = icon.copy; el.classList.remove('done'); }, 1500);
+    },
     'toggle-menu'(el) { setMenu(el.getAttribute('aria-expanded') !== 'true'); },
     'toggle-file'(el) { const p = el.dataset.path; ui.collapsed[p] = !ui.collapsed[p]; render(); },
     'toggle-folder'(el) { const p = el.dataset.path; ui.folders[p] = ui.folders[p] === false; renderTree(); },
@@ -933,7 +941,7 @@
     if (!sign) { btn.hidden = true; return false; }
     const r = sign.getBoundingClientRect();
     // Centered on the edge between the line number and the sign, as on GitHub; it covers part of the sign.
-    btn.style.top = (r.top + window.scrollY) + 'px';
+    btn.style.top = (r.top + window.scrollY + (r.height - 22) / 2) + 'px';
     btn.style.left = (r.left + window.scrollX - 11) + 'px';
     btn.hidden = false;
     return true;
