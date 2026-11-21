@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"reviewit/internal/store"
+	"hrev/internal/store"
 )
 
 // MaxAttachment is the largest image that the viewer can attach to a comment.

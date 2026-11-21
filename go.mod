@@ -1,4 +1,4 @@
-module reviewit
+module hrev
 
 go 1.24.13
 

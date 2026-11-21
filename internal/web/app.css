@@ -26,6 +26,9 @@ button{font:inherit}
 .header h1{margin:0;font-size:18px;font-weight:700}
 .header .desc{margin:0;font-size:14px;color:var(--soft);white-space:pre-line}
 .header .source{margin:0;font-size:13px;color:var(--muted)}
+.title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.copy-session{flex:none;font-weight:500;color:var(--soft)}
+.copy-session.done{color:var(--plus)}
 .tree-resize{flex:0 0 6px;margin-left:-3px;margin-right:-3px;position:sticky;top:var(--top-h,0px);height:calc(100vh - var(--top-h,0px));z-index:2;cursor:col-resize;touch-action:none;outline:none}
 .tree-resize:hover,.tree-resize.active,.tree-resize:focus-visible{background:var(--focus)}
 .pending-count{font-size:13px;color:var(--soft)}

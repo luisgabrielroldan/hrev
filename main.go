@@ -1,4 +1,4 @@
-// Command reviewit opens a local review of a diff in the browser, for a review together with Claude Code.
+// Command hrev opens a local review of a diff in the browser, for a review together with Claude Code.
 package main
 
 import (
@@ -12,28 +12,35 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"reviewit/internal/diffparse"
-	"reviewit/internal/server"
-	"reviewit/internal/skill"
-	"reviewit/internal/store"
+	"hrev/internal/diffparse"
+	"hrev/internal/server"
+	"hrev/internal/skill"
+	"hrev/internal/store"
 )
 
-const usage = `reviewit: review a diff in the browser, together with an agent.
+const usage = `hrev: review a diff in the browser, together with an agent.
 
 Usage:
-  reviewit open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
-  reviewit open --resume <id>
-  reviewit refresh <id> <file.diff> [--title T] [--description D] [--source CMD]
-  reviewit show <id>
-  reviewit wait <id>
-  reviewit state <id>
-  reviewit reply <id> <thread-id> [<text>]     (without <text>, the text comes from stdin)
-  reviewit skill                               (prints the agent instructions)
-  reviewit skill install <dir> [--force]       (writes a stub skill to <dir>/reviewit)
+  hrev open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
+  hrev open --resume <id>
+  hrev refresh <id> <file.diff> [--title T] [--description D] [--source CMD]
+  hrev show <id>
+  hrev wait <id>
+  hrev state <id>
+  hrev reply <id> <thread-id> [<text>]
+  hrev comment <id> <file> [--lines N[-M]] [--side old|new] [--author NAME] [<text>]
+  hrev comment <id> --thread <thread-id> [--author NAME] [<text>]
+  hrev skill
+  hrev skill install <dir> [--force]
+
+"reply" and "comment" read the text from stdin when there is no <text>.
+"comment" writes a pending comment. Only the user sends comments, in the viewer.
+"skill" prints the agent instructions. "skill install" writes a stub skill to <dir>/hrev.
 
 "open" keeps running: it is the server of the review session. Run it in the background.
 "--dir" is the folder for the session data, such as the agent scratchpad (not the project).
@@ -60,6 +67,8 @@ func main() {
 		err = cmdState(rest)
 	case "reply":
 		err = cmdReply(rest)
+	case "comment":
+		err = cmdComment(rest)
 	case "skill":
 		err = cmdSkill(rest)
 	case "help", "-h", "--help":
@@ -68,7 +77,7 @@ func main() {
 		err = fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "reviewit:", err)
+		fmt.Fprintln(os.Stderr, "hrev:", err)
 		os.Exit(1)
 	}
 }
@@ -131,7 +140,7 @@ func (a args) ptr(name string) *string {
 
 func needPos(a args, n int, form string) error {
 	if len(a.pos) != n {
-		return fmt.Errorf("usage: reviewit %s", form)
+		return fmt.Errorf("usage: hrev %s", form)
 	}
 	return nil
 }
@@ -145,7 +154,7 @@ func cmdOpen(argv []string) error {
 	}
 	if id, ok := a.flags["resume"]; ok {
 		if len(a.pos) != 0 {
-			return errors.New("usage: reviewit open --resume <id>")
+			return errors.New("usage: hrev open --resume <id>")
 		}
 		return resume(id)
 	}
@@ -304,7 +313,7 @@ func readDiff(path string) (string, []*diffparse.File, error) {
 }
 
 func openBrowser(url string) {
-	if os.Getenv("REVIEWIT_NO_BROWSER") != "" {
+	if os.Getenv("HREV_NO_BROWSER") != "" {
 		return
 	}
 	var cmd *exec.Cmd
@@ -329,7 +338,7 @@ type client struct {
 }
 
 func notRunning(id string) error {
-	return fmt.Errorf("review session %s is not running; run: reviewit open --resume %s", id, id)
+	return fmt.Errorf("review session %s is not running; run: hrev open --resume %s", id, id)
 }
 
 func connect(id string) (*client, error) {
@@ -361,14 +370,14 @@ func (c *client) do(method, path string, body, out any, timeout time.Duration) e
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-Reviewit-Token", c.si.Token)
+	req.Header.Set("X-Hrev-Token", c.si.Token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {
 		return notRunning(c.id)
 	}
 	defer resp.Body.Close()
-	if resp.Header.Get("X-Reviewit-Session") != c.id {
+	if resp.Header.Get("X-Hrev-Session") != c.id {
 		return notRunning(c.id)
 	}
 	data, err := io.ReadAll(resp.Body)
@@ -496,20 +505,11 @@ func cmdReply(argv []string) error {
 		return err
 	}
 	if len(a.pos) != 2 && len(a.pos) != 3 {
-		return errors.New("usage: reviewit reply <id> <thread-id> [<text>]")
+		return errors.New("usage: hrev reply <id> <thread-id> [<text>]")
 	}
-	text := ""
-	if len(a.pos) == 3 {
-		text = a.pos[2]
-	} else {
-		b, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		text = string(b)
-	}
-	if strings.TrimSpace(text) == "" {
-		return errors.New("the reply is empty")
+	text, err := readText(a, 2, "reply")
+	if err != nil {
+		return err
 	}
 	c, err := connect(a.pos[0])
 	if err != nil {
@@ -525,6 +525,88 @@ func cmdReply(argv []string) error {
 	return nil
 }
 
+// readText returns the text argument, or stdin when there is no text argument.
+func readText(a args, n int, what string) (string, error) {
+	text := ""
+	if len(a.pos) > n {
+		text = a.pos[n]
+	} else {
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", err
+		}
+		text = string(b)
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", fmt.Errorf("the %s is empty", what)
+	}
+	return text, nil
+}
+
+// cmdComment writes a pending user-side comment, the same as the viewer does. --author labels a comment from
+// another reviewer, such as a second agent. Only the user sends comments, in the viewer; the main agent then
+// gets them through wait, as any user comment.
+func cmdComment(argv []string) error {
+	a, err := parseArgs(argv, []string{"lines", "side", "thread", "author"}, nil)
+	if err != nil {
+		return err
+	}
+	req := map[string]any{"name": a.flags["author"], "action": "save"}
+	n := 2 // positional arguments before the text
+	if tid, ok := a.flags["thread"]; ok {
+		if len(a.pos) < 1 || len(a.pos) > 2 || a.ptr("lines") != nil || a.ptr("side") != nil {
+			return errors.New("usage: hrev comment <id> --thread <thread-id> [--author NAME] [<text>]")
+		}
+		req["thread_id"] = tid
+		n = 1
+	} else {
+		if len(a.pos) < 2 || len(a.pos) > 3 {
+			return errors.New("usage: hrev comment <id> <file> [--lines N[-M]] [--side old|new] [--author NAME] [<text>]")
+		}
+		req["file"] = a.pos[1]
+		req["side"] = "file"
+		if lines, ok := a.flags["lines"]; ok {
+			from, to, _ := strings.Cut(lines, "-")
+			if to == "" {
+				to = from
+			}
+			start, err1 := strconv.Atoi(from)
+			end, err2 := strconv.Atoi(to)
+			if err1 != nil || err2 != nil {
+				return fmt.Errorf("--lines must be N or N-M, not %q", lines)
+			}
+			side := a.flags["side"]
+			if side == "" {
+				side = "new"
+			}
+			if side != "old" && side != "new" {
+				return fmt.Errorf("--side must be old or new, not %q", side)
+			}
+			req["side"], req["start_line"], req["end_line"] = side, start, end
+		} else if a.ptr("side") != nil {
+			return errors.New("--side needs --lines")
+		}
+	}
+	text, err := readText(a, n, "comment")
+	if err != nil {
+		return err
+	}
+	req["body"] = text
+	c, err := connect(a.pos[0])
+	if err != nil {
+		return err
+	}
+	var res struct {
+		ID       string `json:"id"`
+		ThreadID string `json:"thread_id"`
+	}
+	if err := c.do("POST", "/api/comments", req, &res, 10*time.Second); err != nil {
+		return err
+	}
+	fmt.Printf("commented: %s in thread %s (pending)\n", res.ID, res.ThreadID)
+	return nil
+}
+
 func cmdSkill(argv []string) error {
 	a, err := parseArgs(argv, nil, []string{"force"})
 	if err != nil {
@@ -535,13 +617,13 @@ func cmdSkill(argv []string) error {
 		return nil
 	}
 	if a.pos[0] != "install" || len(a.pos) != 2 {
-		return errors.New("usage: reviewit skill | reviewit skill install <dir> [--force]")
+		return errors.New("usage: hrev skill | hrev skill install <dir> [--force]")
 	}
 	target, err := skill.Install(a.pos[1], a.bools["force"])
 	if err != nil {
 		return err
 	}
-	fmt.Printf("installed the reviewit skill at %s\n", target)
+	fmt.Printf("installed the hrev skill at %s\n", target)
 	return nil
 }
 

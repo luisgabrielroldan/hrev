@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"reviewit/internal/diffparse"
+	"hrev/internal/diffparse"
 )
 
 func fileWith(path string, newLines ...string) []*diffparse.File {

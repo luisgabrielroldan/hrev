@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"reviewit/internal/diffparse"
-	"reviewit/internal/store"
+	"hrev/internal/diffparse"
+	"hrev/internal/store"
 )
 
 const testDiff = `diff --git a/a.go b/a.go
@@ -25,14 +25,13 @@ const testDiff = `diff --git a/a.go b/a.go
 `
 
 func newTestServer(t *testing.T) (*Server, *httptest.Server) {
-	t.Setenv("REVIEWIT_HOME", t.TempDir())
+	t.Setenv("HREV_HOME", t.TempDir())
 	files, err := diffparse.Parse(testDiff)
 	if err != nil {
 		t.Fatal(err)
 	}
 	st := &store.State{ID: "s1", Rev: 1, Threads: []*store.Thread{}}
-	dir, _ := store.Dir("s1")
-	if err := mkdir(dir); err != nil {
+	if _, err := store.Create("s1", t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	s := New(st, files, "tok")
@@ -45,7 +44,7 @@ func post(t *testing.T, ts *httptest.Server, path string, body any, out any) int
 	t.Helper()
 	b, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", ts.URL+path, bytes.NewReader(b))
-	req.Header.Set("X-Reviewit-Token", "tok")
+	req.Header.Set("X-Hrev-Token", "tok")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -112,8 +111,6 @@ func TestEventCycle(t *testing.T) {
 	}
 }
 
-func mkdir(d string) error { return os.MkdirAll(d, 0o700) }
-
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	for i := 0; i < 200; i++ {
@@ -145,7 +142,7 @@ func TestAttachment(t *testing.T) {
 	_, ts := newTestServer(t)
 	png := []byte("\x89PNG\r\n\x1a\nfake")
 	req, _ := http.NewRequest("POST", ts.URL+"/api/attachments", bytes.NewReader(png))
-	req.Header.Set("X-Reviewit-Token", "tok")
+	req.Header.Set("X-Hrev-Token", "tok")
 	req.Header.Set("Content-Type", "image/png")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -192,5 +189,26 @@ func TestDiffTime(t *testing.T) {
 	resp.Body.Close()
 	if d, err := time.Parse(time.RFC3339, st.DiffTime); err != nil || time.Since(d) > time.Minute {
 		t.Fatalf("diff_time = %q", st.DiffTime)
+	}
+}
+
+// A comment from another reviewer is a user comment with a name; wait and state show the name.
+func TestReviewerName(t *testing.T) {
+	s, ts := newTestServer(t)
+	req := map[string]any{"file": "a.go", "side": "file", "body": "x", "action": "save", "name": " codex "}
+	if code := post(t, ts, "/api/comments", req, nil); code != 200 {
+		t.Fatalf("create comment: status %d", code)
+	}
+	if got := outThread("s1", s.st.Threads[0]).Comments[0]; got.Author != store.User || got.Name != "codex" || s.st.PendingCount() != 1 {
+		t.Fatalf("comment = %+v, pending %d; want a pending user comment named codex", got, s.st.PendingCount())
+	}
+	// The limit counts characters, not bytes: "日" has 3 bytes.
+	req["name"] = strings.Repeat("日", MaxNameLen)
+	if code := post(t, ts, "/api/comments", req, nil); code != 200 {
+		t.Fatalf("a name of %d characters: status %d, want 200", MaxNameLen, code)
+	}
+	req["name"] = strings.Repeat("日", MaxNameLen+1)
+	if code := post(t, ts, "/api/comments", req, nil); code != http.StatusBadRequest {
+		t.Fatalf("a long name: status %d, want 400", code)
 	}
 }

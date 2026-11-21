@@ -1,10 +1,10 @@
-# reviewit — specification
+# hrev — specification
 
 Status: revision 3. No code exists yet.
 
 ## 1. Purpose
 
-reviewit is a local tool to review code changes together with Claude Code, in the same way as a pull request review on GitHub, but without a push.
+hrev is a local tool to review code changes together with Claude Code, in the same way as a pull request review on GitHub, but without a push.
 
 The user works in a Claude Code session. The agent makes changes, with or without a commit. The user asks the agent to open a review. A viewer opens in the browser and shows the diff. The user writes comments on the diff. The agent answers the comments and changes the code. The user can repeat this cycle many times before the first push.
 
@@ -14,7 +14,7 @@ Design rule: keep every mechanism simple and intuitive. Prefer 1 clear rule over
 
 | Term | Meaning |
 |---|---|
-| Agent | The Claude Code session that uses reviewit. |
+| Agent | The Claude Code session that uses hrev. |
 | Viewer | The web page in the browser that shows 1 review session. More than 1 tab can show the same review session. |
 | Review session | The state of 1 review: the diff, the threads and the event queue. A review session has an id. |
 | Thread | A root comment and all replies to it, from the user and from the agent. The id of the root comment is the thread id. |
@@ -41,7 +41,7 @@ The header counter counts only pending comments.
 ## 3. Main flow
 
 1. The user asks for a review in natural language, for example "open a review of this branch".
-2. The agent decides which diff to show, writes it to a file, and runs `reviewit open` in the background.
+2. The agent decides which diff to show, writes it to a file, and runs `hrev open` in the background.
 3. The viewer opens in the default browser.
 4. The user selects lines, or uses the file comment button, and writes a comment.
 5. The user clicks Ask now or Comment.
@@ -54,7 +54,7 @@ While the review is open, the agent is free. The user can also talk to the agent
 
 ## 4. Review session rules
 
-- One review session belongs to the Claude Code session that created it. The agent uses only the ids that it created. This rule is a convention for the agent. reviewit does not enforce it.
+- One review session belongs to the Claude Code session that created it. The agent uses only the ids that it created. This rule is a convention for the agent. hrev does not enforce it.
 - A review session does not end in an explicit way. It stays as saved state until the automatic cleanup removes it.
 - A new review session starts with no comments, also for the same diff.
 - The agent can read the complete state of the review session at any time.
@@ -71,6 +71,7 @@ All text in the viewer is in English. The viewer uses a dark theme only.
 - A header at the top shows the title, the description and the diff source, with the full width. Below a separator line, a bar shows the file tree button on the left, and the number of pending comments and the Send button on the right.
 - The title, the description and the diff source come from the agent (`--title`, `--description`, `--source`).
 - After the diff source, the header shows the age of the diff, such as "updated 3 min ago". The age comes from the modification time of `diff.patch` in the session folder, which `open` and `refresh` write. The text updates every 30 seconds. Its tooltip shows the exact time.
+- On the right of the title, a "Copy session" button copies "hrev session <id>". The user gives that text to a reviewer agent. The text contains "hrev", so the agent loads the skill, and the id, which every command needs.
 - The Send comments button is disabled when there are 0 pending comments.
 - When the page is scrolled, only the bar stays visible, and it also shows the title. At the top of the page, the full header returns.
 - Below the header, a file tree is on the left and the diff is on the right.
@@ -141,7 +142,7 @@ The viewer keeps a live connection to the server. The server computes the status
 
 | Status | Visible when |
 |---|---|
-| "Reconnecting to reviewit… Your comments are safe. New comments can be saved when the connection returns." | The viewer has no connection to the server. The viewer tries to connect again every second. |
+| "Reconnecting to hrev… Your comments are safe. New comments can be saved when the connection returns." | The viewer has no connection to the server. The viewer tries to connect again every second. |
 | "The agent is working on your comments" | `wait` printed events, and the next `wait` did not start yet. There is no time limit. |
 | "The agent is not listening right now. Your comments are saved. The agent gets them when it listens again." | No `wait` is active for 30 seconds, and the "working" status is not active. |
 
@@ -152,13 +153,15 @@ Each thread with a sent comment also shows its own status under the last message
 ## 6. Command line interface
 
 ```
-reviewit open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
-reviewit open --resume <id>
-reviewit refresh <id> <file.diff> [--title T] [--description D] [--source CMD]
-reviewit show <id>
-reviewit wait <id>
-reviewit state <id>
-reviewit reply <id> <thread-id> [<text>]
+hrev open <file.diff> --dir <folder> [--title T] [--description D] [--source CMD] [--replace ID [--force]]
+hrev open --resume <id>
+hrev refresh <id> <file.diff> [--title T] [--description D] [--source CMD]
+hrev show <id>
+hrev wait <id>
+hrev state <id>
+hrev reply <id> <thread-id> [<text>]
+hrev comment <id> <file> [--lines N[-M]] [--side old|new] [--author NAME] [<text>]
+hrev comment <id> --thread <thread-id> [--author NAME] [<text>]
 ```
 
 | Command | Behavior |
@@ -171,13 +174,14 @@ reviewit reply <id> <thread-id> [<text>]
 | `wait` | Waits for events, prints all queued events as JSON (section 7.1), and exits with code 0. If events are already queued, it prints them and exits immediately. If a newer `wait` starts on the same id, the older `wait` exits with code 0, no events, and the message "replaced". If `open --replace` stops the server, `wait` exits with code 0 and the message "was replaced by <new id>". If the server stops for another reason, `wait` exits with a non-zero code and the "not running" message. |
 | `state` | Prints the complete state of the review session as JSON (section 7.2). |
 | `reply` | Writes an agent reply in a thread. The text comes from the argument, or from stdin when there is no argument. |
+| `comment` | Writes a user comment, the same as the viewer: on a file (no `--lines`), on lines (`--lines`, side `new` by default), or as an answer in a thread (`--thread`). The text comes from the argument, or from stdin. The comment is pending. Only the user sends comments, in the viewer, with "Send comments" or "Ask now". `--author NAME` labels a comment from another reviewer, such as a second agent: the viewer shows the name in place of "You". The comment is still a user comment, so the main agent gets it through `wait` after the user sends it. A name has at most 40 characters. |
 
-The diff is always a file. The agent produces it with git or with any other tool. reviewit does not run git.
+The diff is always a file. The agent produces it with git or with any other tool. hrev does not run git.
 
 When the server of a review session is not running, every command except `open` fails with a non-zero code and a message that says what to do, for example:
 
 ```
-review session abc123 is not running; run: reviewit open --resume abc123
+review session abc123 is not running; run: hrev open --resume abc123
 ```
 
 ## 7. Events and state
@@ -225,6 +229,7 @@ A `<thread>`:
 
 - `side` is `old`, `new` or `file`. For `file`, the line fields and `selected_text` are null.
 - `state` exists only on user comments: `pending`, `sent` or `answered`.
+- `name` exists only on a user comment that `hrev comment --author` wrote: the name of the other reviewer.
 
 ### 7.2 Output of `state`
 
@@ -246,13 +251,13 @@ A `<thread>`:
 
 ### 8.1 Server
 
-- Each review session has its own server inside the process of `reviewit open`.
+- Each review session has its own server inside the process of `hrev open`.
 - The server listens only on `127.0.0.1`, on a free port that the operating system selects.
 - The server stops when its process ends. Claude Code ends its background processes when it closes, so the server stops with the Claude Code session.
 
 ### 8.2 Session folder
 
-The state is saved in `<dir>/<id>/`, where `<dir>` is the `--dir` folder of `open`. `~/.reviewit/<id>.path` holds the path of that folder, so every other command needs only the id. An older session without a pointer file is the folder `~/.reviewit/<id>/`. The session folder contains:
+The state is saved in `<dir>/<id>/`, where `<dir>` is the `--dir` folder of `open`. The pointer file `<cache>/hrev/<id>.path` holds the path of that folder, so every other command needs only the id. `<cache>` is the user cache folder: `~/Library/Caches` on macOS, `~/.cache` on Linux. The pointer files are the only files outside the `--dir` folder. The session folder contains:
 
 - the state of the review session;
 - the copy of the current diff file;
@@ -265,29 +270,29 @@ The state is saved in `<dir>/<id>/`, where `<dir>` is the `--dir` folder of `ope
 - **Finding the server:** a command reads the port and the token from `server.json`. The server answers each request with its session id. If the connection fails or the id is different, the command gives the "not running" message.
 - **One server for each session:** the server holds a lock on the lock file while it runs. The operating system releases the lock when the process ends, also after a crash. A second server cannot start on an id whose lock is held.
 - **Access:** the URL of the viewer contains a random token. The server rejects every request without the correct token. Reason: a comment is an instruction to an agent that changes code, and a hostile web page in the same browser must not be able to send one.
-- **Cleanup:** `reviewit open` starts with a cleanup step. The cleanup removes a session folder and its pointer file when its last file change is older than 7 days and its lock is not held. It also removes a pointer file whose folder no longer exists, for example after a scratchpad cleanup. Other commands do not run the cleanup.
+- **Cleanup:** `hrev open` starts with a cleanup step. The cleanup removes a session folder and its pointer file when its last file change is older than 7 days and its lock is not held. It also removes a pointer file whose folder no longer exists, for example after a scratchpad cleanup. Other commands do not run the cleanup.
 
 ## 9. Agent workflow (for the skill)
 
 1. Write the diff to a file.
-2. Run `reviewit open <file> --title ... --description ... --source "<command>"` in the background. Read the id from the output. The output of that background task stays available if the id is needed again.
-3. Run `reviewit wait <id>` in the background.
-4. When `wait` ends with events, handle all events: change the code, write the new diff, run `reviewit refresh`, and run `reviewit reply` for each thread.
-5. Run `reviewit wait <id>` in the background again.
+2. Run `hrev open <file> --title ... --description ... --source "<command>"` in the background. Read the id from the output. The output of that background task stays available if the id is needed again.
+3. Run `hrev wait <id>` in the background.
+4. When `wait` ends with events, handle all events: change the code, write the new diff, run `hrev refresh`, and run `hrev reply` for each thread.
+5. Run `hrev wait <id>` in the background again.
 6. If `wait` ends with the message "replaced", do nothing. Another `wait` is active. If `wait` or the old `open` task ends with the message "was replaced by <new id>", do nothing for the old id.
-7. If `wait` or the `open` task ends because the server stopped, run `reviewit open --resume <id>` in the background, then continue at step 3.
-8. To open the window again, run `reviewit show <id>`.
-9. To start a new review session, run `reviewit open ... --replace <old id>` in the background, then run `wait` on the new id. If the command fails because the old session has pending or sent comments, tell the user. Use `--force` only when the user asks for the replacement in explicit words.
-10. After `claude --resume`, run `reviewit open --resume <id>` in the background. Then run `reviewit state <id>` and handle every comment in `unhandled`, as in step 4. Then continue at step 3.
-11. After a context summary, run `reviewit state <id>` to get the diff source again.
+7. If `wait` or the `open` task ends because the server stopped, run `hrev open --resume <id>` in the background, then continue at step 3.
+8. To open the window again, run `hrev show <id>`.
+9. To start a new review session, run `hrev open ... --replace <old id>` in the background, then run `wait` on the new id. If the command fails because the old session has pending or sent comments, tell the user. Use `--force` only when the user asks for the replacement in explicit words.
+10. After `claude --resume`, run `hrev open --resume <id>` in the background. Then run `hrev state <id>` and handle every comment in `unhandled`, as in step 4. Then continue at step 3.
+11. After a context summary, run `hrev state <id>` to get the diff source again.
 
 ### 9.1 Skill distribution
 
-- The full agent instructions are inside the binary. `reviewit skill` prints them. A binary upgrade updates them.
-- `reviewit skill install <dir>` writes a small stub to `<dir>/reviewit/SKILL.md`, for example with `<dir>` = `~/.claude/skills`, `~/.codex/skills` or `.agents/skills`. The stub has the name and the description, so the agent discovers the skill. Its body says: run `reviewit skill` and follow the output.
-- The stub contains the marker `<!-- reviewit-skill-stub -->`.
-- If `<dir>/reviewit` exists and holds the marker, the command fails and asks for `--force`. With `--force`, the command deletes the folder and writes the stub again.
-- If `<dir>/reviewit` exists without the marker, the command fails and changes nothing, also with `--force`.
+- The full agent instructions are inside the binary. `hrev skill` prints them. A binary upgrade updates them.
+- `hrev skill install <dir>` writes a small stub to `<dir>/hrev/SKILL.md`, for example with `<dir>` = `~/.claude/skills`, `~/.codex/skills` or `.agents/skills`. The stub has the name and the description, so the agent discovers the skill. Its body says: run `hrev skill` and follow the output.
+- The stub contains the marker `<!-- hrev-skill-stub -->`.
+- If `<dir>/hrev` exists and holds the marker, the command fails and asks for `--force`. With `--force`, the command deletes the folder and writes the stub again.
+- If `<dir>/hrev` exists without the marker, the command fails and changes nothing, also with `--force`.
 
 ## 10. Technology
 
@@ -299,7 +304,7 @@ The state is saved in `<dir>/<id>/`, where `<dir>` is the `--dir` folder of `ope
 
 ## 11. Verified assumptions
 
-These tests used simple shell commands, not the reviewit binary.
+These tests used simple shell commands, not the hrev binary.
 
 | Assumption | Result |
 |---|---|

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"reviewit/internal/diffparse"
+	"hrev/internal/diffparse"
 )
 
 // NextCommentID returns a new comment id, such as "c7".

@@ -26,17 +26,17 @@
 
   // The width of the file list is a per-viewer convenience. Storage can be missing, so every access is guarded.
   function loadTreeWidth() {
-    try { const w = parseInt(localStorage.getItem('reviewit.treeWidth'), 10); if (w > 0) return w; } catch (e) { /* no storage */ }
+    try { const w = parseInt(localStorage.getItem('hrev.treeWidth'), 10); if (w > 0) return w; } catch (e) { /* no storage */ }
     return 300;
   }
   function saveTreeWidth(w) {
-    try { localStorage.setItem('reviewit.treeWidth', String(w)); } catch (e) { /* no storage */ }
+    try { localStorage.setItem('hrev.treeWidth', String(w)); } catch (e) { /* no storage */ }
   }
   function loadTreeOpen() {
-    try { return localStorage.getItem('reviewit.treeOpen') !== 'false'; } catch (e) { return true; }
+    try { return localStorage.getItem('hrev.treeOpen') !== 'false'; } catch (e) { return true; }
   }
   function saveTreeOpen(v) {
-    try { localStorage.setItem('reviewit.treeOpen', String(v)); } catch (e) { /* no storage */ }
+    try { localStorage.setItem('hrev.treeOpen', String(v)); } catch (e) { /* no storage */ }
   }
   const clampTreeWidth = (w) => Math.round(Math.max(180, Math.min(w, window.innerWidth * 0.6)));
   let errorTimer = null;
@@ -48,7 +48,7 @@
   const fileId = (path) => 'file-' + idFor(path);
 
   async function api(path, body) {
-    const opts = { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Reviewit-Token': token } };
+    const opts = { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Hrev-Token': token } };
     if (body !== undefined) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
@@ -189,7 +189,7 @@
         if (caret && typeof el.setSelectionRange === 'function') el.setSelectionRange(caret[0], caret[1]);
       }
     }
-    document.title = (data.title || 'Review session') + ' · reviewit';
+    document.title = (data.title || 'Review session') + ' · hrev';
   }
 
   // Full header: the title and the texts use the full width. Below a separator, a bar holds the file list button
@@ -201,7 +201,7 @@
     const label = `${ui.treeOpen ? 'Hide' : 'Show'} the file list`;
     return `<header class="header ${ui.compact ? 'compact' : ''}">
       <div class="header-main">
-        <h1>${title}</h1>
+        <div class="title-row"><h1>${title}</h1><button class="btn btn-small copy-session" type="button" data-action="copy-session" title="Copy &quot;hrev session ${esc(data.id)}&quot;, to give the session to a reviewer agent">${icon.copy}<span>Copy session</span></button></div>
         ${data.description ? `<p class="desc">${esc(data.description)}</p>` : ''}
         ${data.source || data.diff_time ? `<p class="source">${data.source ? `Diff: <span class="mono">${esc(data.source)}</span>` : 'Diff'}${diffAgeHTML()}</p>` : ''}
       </div>
@@ -242,7 +242,7 @@
   }, 30000);
 
   function statusHTML() {
-    if (!ui.connected) return '<div class="status status-disconnected" role="status">Reconnecting to reviewit… Your comments are safe. New comments can be saved when the connection returns.</div>';
+    if (!ui.connected) return '<div class="status status-disconnected" role="status">Reconnecting to hrev… Your comments are safe. New comments can be saved when the connection returns.</div>';
     if (ui.error) return `<div class="status status-error" role="alert">${esc(ui.error)}</div>`;
     if (data.agent === 'working') return '<div class="status status-working" role="status">The agent is working on your comments</div>';
     if (data.agent === 'idle') return '<div class="status status-idle" role="status">The agent is not listening right now. Your comments are saved. The agent gets them when it listens again.</div>';
@@ -484,7 +484,7 @@
     const mark = '![Uploading image…]()';
     insertText(ta, mark);
     try {
-      const r = await fetch('/api/attachments', { method: 'POST', headers: { 'X-Reviewit-Token': token, 'Content-Type': file.type }, body: file });
+      const r = await fetch('/api/attachments', { method: 'POST', headers: { 'X-Hrev-Token': token, 'Content-Type': file.type }, body: file });
       if (!r.ok) throw new Error((await r.text()).trim() || r.statusText);
       const res = await r.json();
       ta.value = ta.value.replace(mark, res.markdown);
@@ -694,9 +694,9 @@
       }
     }
     return `<div class="msg">
-      <div class="av ${user ? 'av-user' : 'av-agent'}" aria-hidden="true">${user ? 'YOU' : 'AI'}</div>
+      <div class="av ${user ? 'av-user' : 'av-agent'}" aria-hidden="true">${user ? (c.name ? esc(c.name.slice(0, 2).toUpperCase()) : 'YOU') : 'AI'}</div>
       <div class="msg-main">
-        <div class="meta"><span class="who">${user ? 'You' : 'Agent'}</span>${isRoot ? `<span>${esc(where(t))}</span>` : ''}${badgeFor(c)}</div>
+        <div class="meta"><span class="who">${user ? (c.name ? esc(c.name) : 'You') : 'Agent'}</span>${isRoot ? `<span>${esc(where(t))}</span>` : ''}${badgeFor(c)}</div>
         ${body}
       </div>
     </div>`;
@@ -760,6 +760,13 @@
       el.innerHTML = icon.check;
       el.classList.add('done');
       setTimeout(() => { el.innerHTML = icon.copy; el.classList.remove('done'); }, 1500);
+    },
+    // Copy "hrev session <id>" for a reviewer agent; the button shows "Copied" for a moment.
+    async 'copy-session'(el) {
+      try { await navigator.clipboard.writeText('hrev session ' + data.id); } catch (e) { showError('Could not copy the session.'); return; }
+      el.innerHTML = icon.check + '<span>Copied</span>';
+      el.classList.add('done');
+      setTimeout(() => { el.innerHTML = icon.copy + '<span>Copy session</span>'; el.classList.remove('done'); }, 1500);
     },
     'toggle-menu'(el) { setMenu(el.getAttribute('aria-expanded') !== 'true'); },
     'toggle-file'(el) { const p = el.dataset.path; ui.collapsed[p] = !ui.collapsed[p]; render(); },

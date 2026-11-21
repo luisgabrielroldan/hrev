@@ -1,4 +1,4 @@
-// Package store holds the state of a review session and saves it in ~/.reviewit/<id>/.
+// Package store holds the state of a review session and saves it in the session folder that "open --dir" gives.
 package store
 
 import (
@@ -41,6 +41,7 @@ type CodeLine struct {
 type Comment struct {
 	ID      string    `json:"id"`
 	Author  string    `json:"author"`
+	Name    string    `json:"name,omitempty"` // a reviewer name, such as "codex", on a user-side comment from the CLI
 	Body    string    `json:"body"`
 	State   string    `json:"state,omitempty"`   // user comments only
 	Printed bool      `json:"printed,omitempty"` // wait printed the event of this comment
@@ -92,20 +93,20 @@ type ServerInfo struct {
 	PID   int    `json:"pid"`
 }
 
-// Root is the folder that holds all review sessions. REVIEWIT_HOME overrides it.
+// Root is the folder that holds the pointer file of each review session: <user cache folder>/hrev, for example
+// ~/Library/Caches/hrev on macOS or ~/.cache/hrev on Linux. HREV_HOME overrides it.
 func Root() (string, error) {
-	if h := os.Getenv("REVIEWIT_HOME"); h != "" {
+	if h := os.Getenv("HREV_HOME"); h != "" {
 		return h, nil
 	}
-	home, err := os.UserHomeDir()
+	cache, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".reviewit"), nil
+	return filepath.Join(cache, "hrev"), nil
 }
 
-// Dir is the folder of one review session. A session made with "open --dir" has a pointer file
-// <root>/<id>.path that holds its folder. An older session is the folder <root>/<id>.
+// Dir is the folder of one review session. The pointer file <root>/<id>.path holds that folder.
 func Dir(id string) (string, error) {
 	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
 		return "", fmt.Errorf("%q is not a review session id", id)
@@ -114,10 +115,11 @@ func Dir(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if b, err := os.ReadFile(filepath.Join(root, id+".path")); err == nil {
-		return strings.TrimSpace(string(b)), nil
+	b, err := os.ReadFile(filepath.Join(root, id+".path"))
+	if err != nil {
+		return "", fmt.Errorf("no review session with id %s", id)
 	}
-	return filepath.Join(root, id), nil
+	return strings.TrimSpace(string(b)), nil
 }
 
 // Create makes the folder of a new review session in base, and records it in the root folder. The agent passes
@@ -285,22 +287,17 @@ func Cleanup(maxAge time.Duration) {
 		return
 	}
 	for _, e := range entries {
-		var dir, pointer string
-		switch {
-		case e.IsDir():
-			dir = filepath.Join(root, e.Name())
-		case strings.HasSuffix(e.Name(), ".path"):
-			pointer = filepath.Join(root, e.Name())
-			b, err := os.ReadFile(pointer)
-			if err != nil {
-				continue
-			}
-			dir = strings.TrimSpace(string(b))
-			if _, err := os.Stat(dir); err != nil {
-				os.Remove(pointer) // the folder is gone, for example after a scratchpad cleanup
-				continue
-			}
-		default:
+		if !strings.HasSuffix(e.Name(), ".path") {
+			continue
+		}
+		pointer := filepath.Join(root, e.Name())
+		b, err := os.ReadFile(pointer)
+		if err != nil {
+			continue
+		}
+		dir := strings.TrimSpace(string(b))
+		if _, err := os.Stat(dir); err != nil {
+			os.Remove(pointer) // the folder is gone, for example after a scratchpad cleanup
 			continue
 		}
 		if time.Since(lastChange(dir)) < maxAge {
@@ -311,9 +308,7 @@ func Cleanup(maxAge time.Duration) {
 			continue
 		}
 		os.RemoveAll(dir)
-		if pointer != "" {
-			os.Remove(pointer)
-		}
+		os.Remove(pointer)
 		f.Close()
 	}
 }

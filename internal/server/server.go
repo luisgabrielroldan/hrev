@@ -12,11 +12,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
-	"reviewit/internal/diffparse"
-	"reviewit/internal/highlight"
-	"reviewit/internal/store"
-	"reviewit/internal/web"
+	"hrev/internal/diffparse"
+	"hrev/internal/highlight"
+	"hrev/internal/store"
+	"hrev/internal/web"
 )
 
 // NotListeningDelay is how long no wait must be active before the viewer shows "not listening".
@@ -144,8 +146,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /cli/show", s.handleShow)
 	mux.HandleFunc("POST /cli/stop", s.handleStop)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Reviewit-Session", s.st.ID)
-		tok := r.Header.Get("X-Reviewit-Token")
+		w.Header().Set("X-Hrev-Session", s.st.ID)
+		tok := r.Header.Get("X-Hrev-Token")
 		if tok == "" {
 			tok = r.URL.Query().Get("t")
 		}
@@ -243,7 +245,12 @@ type createReq struct {
 	EndLine   int    `json:"end_line"`
 	Body      string `json:"body"`
 	Action    string `json:"action"` // "ask" or "save"
+	// Name labels a comment from another reviewer, such as a second agent. The comment is a user comment.
+	Name string `json:"name"`
 }
+
+// MaxNameLen is the longest reviewer name.
+const MaxNameLen = 40
 
 func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 	var req createReq
@@ -259,9 +266,14 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "action must be ask or save", http.StatusBadRequest)
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
+	if utf8.RuneCountInString(req.Name) > MaxNameLen || strings.ContainsFunc(req.Name, unicode.IsControl) {
+		http.Error(w, "the author name must have at most 40 characters and no control characters", http.StatusBadRequest)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c := &store.Comment{Author: store.User, Body: req.Body, State: store.Pending, Rev: s.st.Rev, Created: time.Now()}
+	c := &store.Comment{Author: store.User, Name: req.Name, Body: req.Body, State: store.Pending, Rev: s.st.Rev, Created: time.Now()}
 	var t *store.Thread
 	if req.ThreadID != "" {
 		t = s.st.Thread(req.ThreadID)
@@ -451,6 +463,7 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 type OutComment struct {
 	ID     string `json:"id"`
 	Author string `json:"author"`
+	Name   string `json:"name,omitempty"`
 	Body   string `json:"body"`
 	State  string `json:"state,omitempty"`
 	// Images are the local paths of the images that the user pasted into this comment.
@@ -486,7 +499,7 @@ func outThread(id string, t *store.Thread) OutThread {
 		o.StartLine, o.EndLine, o.SelectedText = &start, &end, &text
 	}
 	for _, c := range t.Comments {
-		o.Comments = append(o.Comments, OutComment{ID: c.ID, Author: c.Author, Body: c.Body, State: c.State, Images: imagePaths(id, c.Body)})
+		o.Comments = append(o.Comments, OutComment{ID: c.ID, Author: c.Author, Name: c.Name, Body: c.Body, State: c.State, Images: imagePaths(id, c.Body)})
 	}
 	return o
 }

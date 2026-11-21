@@ -10,7 +10,7 @@ import (
 // Cleanup removes an old session with its pointer, and a pointer whose folder is already gone.
 func TestCreateAndCleanup(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("REVIEWIT_HOME", root)
+	t.Setenv("HREV_HOME", root)
 	base := t.TempDir()
 
 	dir, err := Create("aaaa1111", base)
