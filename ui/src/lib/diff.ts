@@ -1,5 +1,5 @@
 // Pure functions on the diff and the threads.
-import type { DiffFile, DiffLine, Draft, LineKind, Session, Side, Thread, ThreadSide } from '../types.ts';
+import type { DiffFile, DiffLine, Draft, Hunk, LineKind, Session, Side, Thread, ThreadSide } from '../types.ts';
 
 export interface NumberedLine {
   num: number;
@@ -134,4 +134,38 @@ export function ago(iso: string, now = Date.now()): string {
   const h = Math.round(m / 60);
   if (h < 24) return `${h} h ago`;
   return `${Math.round(h / 24)} d ago`;
+}
+
+/** A gap before a hunk: lines of the file that are not in the diff. */
+export interface HunkGap {
+  lines: number;
+  /** The section name that git puts after the second @@ of the hunk header, such as a function name. */
+  section: string;
+}
+
+const nums = (h: Hunk, side: Side) => h.lines.map((l) => l[side]).filter((n): n is number => !!n);
+
+/**
+ * hunkGap returns the lines before hunk i that are not in the diff, or null when there are none. The count comes
+ * from the line numbers of the 2 hunks, on a side that both hunks have. Before the first hunk, it is the lines
+ * above its first line.
+ */
+export function hunkGap(hunks: Hunk[], i: number): HunkGap | null {
+  const h = hunks[i]!;
+  let lines = 0;
+  for (const side of ['new', 'old'] as const) {
+    const next = nums(h, side);
+    if (!next.length) continue;
+    if (i === 0) {
+      lines = next[0]! - 1;
+      break;
+    }
+    const prev = nums(hunks[i - 1]!, side);
+    if (!prev.length) continue;
+    lines = next[0]! - prev[prev.length - 1]! - 1;
+    break;
+  }
+  if (lines <= 0) return null;
+  const section = h.header.match(/^@@[^@]*@@\s*(.*)$/)?.[1]?.trim() ?? '';
+  return { lines, section };
 }

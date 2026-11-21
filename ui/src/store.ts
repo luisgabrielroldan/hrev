@@ -2,7 +2,7 @@
 // reads a signal redraws only when that signal changes. The text of each open editor is its own signal, so
 // typing redraws only the editor and not the diff.
 import { batch, computed, signal, type Signal } from '@preact/signals';
-import { api, connectEvents, type SaveMode } from './api.ts';
+import { api, connectEvents, type SaveMode, type StateResponse } from './api.ts';
 import {
   fileDraftKey,
   findFile,
@@ -51,6 +51,11 @@ export const focusRequest = signal<string | null>(null);
  * diff can move a thread to another row: the editor then shows again as a new component.
  */
 export const previews = signal<ReadonlySet<string>>(new Set());
+/**
+ * The context lines that the user opened in folds: file path -> new-side line numbers. A new diff (a new rev)
+ * closes all folds again, because the line numbers can change.
+ */
+export const revealed = signal<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
 
 export const threadsByFile = computed(() => {
   const out = new Map<string, Thread[]>();
@@ -135,26 +140,28 @@ function keepFocus(): () => void {
 }
 
 /**
- * reuse keeps the objects of the previous state that did not change, so that a component that gets the same
- * object can skip its redraw. The diff is the same while rev is the same. A thread is reused when its JSON is equal.
+ * reuse builds the new state and keeps the objects of the previous state that did not change, so that a
+ * component that gets the same object can skip its redraw. The diff is the same while rev is the same: the server
+ * then leaves out the files. A thread is reused when its JSON is equal.
  */
-function reuse(prev: Session | null, next: Session): Session {
-  if (!prev) return next;
-  const files = prev.rev === next.rev ? prev.files : next.files;
+function reuse(prev: Session | null, next: StateResponse): Session {
+  const files = next.files ?? (prev && prev.rev === next.rev ? prev.files : null);
+  if (!files) throw new Error('The server sent no files.');
+  if (!prev) return { ...next, files };
   const old = new Map(prev.threads.map((t) => [t.id, t]));
   const threads = next.threads.map((t) => {
     const p = old.get(t.id);
     return p && JSON.stringify(p) === JSON.stringify(t) ? p : t;
   });
-  return { ...next, files, threads };
+  return { ...next, files: prev.rev === next.rev ? prev.files : files, threads };
 }
 
-// ---------- session ----------
-
 export async function load(): Promise<void> {
-  const s = reuse(session.peek(), await api.state());
+  const prev = session.peek();
+  const s = reuse(prev, await api.state(prev?.rev));
   const restoreFocus = keepFocus();
   batch(() => {
+    if (prev && prev.rev !== s.rev) revealed.value = new Map();
     session.value = s;
     if (!currentFile.value && s.files.length) currentFile.value = s.files[0]!.path;
     syncDrafts(s);
@@ -225,6 +232,13 @@ export function gotoFile(path: string): void {
     collapsedFiles.value = toggled(collapsedFiles.value, path, false);
   });
   requestAnimationFrame(() => document.getElementById(fileId(path))?.scrollIntoView({ block: 'start' }));
+}
+
+/** revealLines opens context lines of a fold. */
+export function revealLines(path: string, lines: number[]): void {
+  const next = new Map(revealed.value);
+  next.set(path, new Set([...(revealed.value.get(path) ?? []), ...lines]));
+  revealed.value = next;
 }
 
 export function toggleThread(t: Thread): void {

@@ -192,6 +192,26 @@ func TestDiffTime(t *testing.T) {
 	}
 }
 
+// The viewer state leaves out the files when the viewer already has the files of the current rev.
+func TestStateFilesOnlyForNewRev(t *testing.T) {
+	_, ts := newTestServer(t)
+	for _, tc := range []struct {
+		query string
+		files bool
+	}{{"", true}, {"&rev=0", true}, {"&rev=1", false}} {
+		resp, err := http.Get(ts.URL + "/api/state?t=tok" + tc.query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var st map[string]json.RawMessage
+		json.NewDecoder(resp.Body).Decode(&st)
+		resp.Body.Close()
+		if _, ok := st["files"]; ok != tc.files {
+			t.Errorf("query %q: files present = %v, want %v", tc.query, ok, tc.files)
+		}
+	}
+}
+
 // A comment from another reviewer is a user comment with a name; wait and state show the name.
 func TestReviewerName(t *testing.T) {
 	s, ts := newTestServer(t)

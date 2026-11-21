@@ -197,3 +197,13 @@ button{font:inherit}
 .filehead{position:static}
 }
 .folder-ic{color:var(--muted);flex:0 0 18px}
+.fold-row{display:flex;align-items:center;min-height:30px;background:var(--hunk);color:var(--muted);font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px}
+.fold-btns{flex:0 0 104px;display:flex;justify-content:center;gap:2px}
+.rows.split .fold-btns{flex-basis:52px}
+.fold-btn{display:flex;align-items:center;justify-content:center;width:28px;height:24px;padding:0;border:none;border-radius:var(--radius);background:transparent;color:var(--muted);cursor:pointer}
+.fold-btn:hover,.fold-btn:focus-visible{background:var(--accent);color:#fff;outline:none}
+.fold-label{margin-left:20px;padding:0 6px;border:none;border-radius:var(--radius);background:transparent;color:var(--muted);font:inherit;cursor:pointer}
+.fold-label:hover,.fold-label:focus-visible{color:var(--link);outline:none}
+.gap-label{margin-left:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gap-section{color:var(--soft)}
+.diff-end{height:8px;background:var(--hunk);border-top:1px solid var(--border)}

@@ -3,12 +3,15 @@ import { useComputed } from '@preact/signals';
 import { memo } from 'preact/compat';
 import { Fragment } from 'preact';
 import { useMemo, useRef } from 'preact/hooks';
-import { inlineThreadTest, pairs, sign, isSelected, type Range } from '../lib/diff.ts';
-import { fileId } from '../lib/html.ts';
+import { hunkGap, inlineThreadTest, pairs, sign, isSelected, type HunkGap, type Range } from '../lib/diff.ts';
+import { foldHunk, revealedBy, STEP, type FoldDirection, type FoldItem } from '../lib/folds.ts';
+import { fileId, plural } from '../lib/html.ts';
 import {
   collapsedFiles,
   drafts,
   openFileComment,
+  revealed,
+  revealLines,
   selectedRanges,
   threadsByFile,
   toggleFile,
@@ -18,7 +21,7 @@ import {
 import type { DiffFile, DiffLine, Side, Thread } from '../types.ts';
 import { Code } from './Code.tsx';
 import { CopyButton } from './CopyButton.tsx';
-import { ChevronIcon, CommentIcon } from './icons.tsx';
+import { ChevronIcon, CommentIcon, ExpandDownIcon, ExpandUpIcon, UnfoldIcon } from './icons.tsx';
 import { DraftView, ThreadView } from './Thread.tsx';
 
 const NOTES: Partial<Record<DiffFile['status'], string>> = { added: 'new file', deleted: 'deleted', renamed: 'renamed' };
@@ -59,6 +62,7 @@ function FileCardView({ file: f }: { file: DiffFile }) {
   const threads = useStable(() => threadsByFile.value.get(f.path) ?? []).value;
   const fileDrafts = useStable(() => Object.values(drafts.value).filter((d) => d.file === f.path));
   const ranges = useStable(() => selectedRanges(f.path));
+  const shown = useComputed(() => revealed.value.get(f.path)).value;
   const isInline = useMemo(() => inlineThreadTest(f), [f]);
 
   const title = f.status === 'renamed' && f.old_path !== f.path ? `${f.old_path} → ${f.path}` : f.path;
@@ -74,6 +78,13 @@ function FileCardView({ file: f }: { file: DiffFile }) {
     const d = lineDrafts.filter((x) => x.side === side && x.end === num);
     return t.length || d.length ? { threads: t, drafts: d } : null;
   };
+  // A fold never hides a line with a thread or a draft, or a line that the user opened.
+  const pinned: Range[] = [
+    ...inlineThreads.map((t) => ({ side: t.side as Side, lo: t.start_line ?? 0, hi: t.end_line ?? 0 })),
+    ...lineDrafts.map((d) => ({ side: d.side as Side, lo: d.start, hi: d.end })),
+  ];
+  const keep = (l: DiffLine) => !!(l.new && shown?.has(l.new)) || isSelected(pinned, 'old', l.old) || isSelected(pinned, 'new', l.new);
+  const folds = f.hunks.map((h) => foldHunk(h.lines, keep));
 
   return (
     <section class={`card ${open ? 'open' : ''}`} id={fileId(f.path)}>
@@ -112,9 +123,9 @@ function FileCardView({ file: f }: { file: DiffFile }) {
           ) : !f.hunks.length ? (
             <div class="note-row">No line changes</div>
           ) : view.value === 'split' ? (
-            <SplitRows file={f} ranges={ranges.value} slotsAt={slotsAt} />
+            <SplitRows file={f} ranges={ranges.value} slotsAt={slotsAt} folds={folds} />
           ) : (
-            <UnifiedRows file={f} ranges={ranges.value} slotsAt={slotsAt} />
+            <UnifiedRows file={f} ranges={ranges.value} slotsAt={slotsAt} folds={folds} />
           )}
         </div>
       )}
@@ -128,6 +139,71 @@ interface RowsProps {
   file: DiffFile;
   ranges: Range[];
   slotsAt: (side: Side, num: number | undefined) => Slots | null;
+  /** The items of each hunk: the lines that show and the folds. */
+  folds: FoldItem[][];
+}
+
+type Fold = Extract<FoldItem, { kind: 'fold' }>;
+
+/**
+ * DiffEnd marks the end of the lines in the diff, below the last hunk. The diff does not say how long the file is,
+ * so the file can continue below it. An added or a deleted file comes complete in the diff and has no mark.
+ */
+function DiffEnd({ file }: { file: DiffFile }) {
+  if (file.status === 'added' || file.status === 'deleted') return null;
+  const label = 'The diff has no more lines here. The file can continue.';
+  return <div class="diff-end" role="separator" aria-label={label} title={label} />;
+}
+
+/** GapRow marks lines of the file that are not in the diff, so 2 hunks do not look joined. It does not open. */
+function GapRow({ gap }: { gap: HunkGap | null }) {
+  if (!gap) return null;
+  return (
+    <div class="fold-row">
+      <span class="fold-btns" />
+      <span class="gap-label">
+        {plural(gap.lines, 'line')} not shown
+        {gap.section && <span class="gap-section"> · {gap.section}</span>}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * FoldRow stands for hidden context lines. A small fold opens with 1 click. A larger fold opens STEP lines at a
+ * time, upward from the line below it or downward from the line above it, or all at once with a click on the label.
+ */
+function FoldRow({ path, lines, fold }: { path: string; lines: DiffLine[]; fold: Fold }) {
+  const n = fold.to - fold.from;
+  const open = (dir: FoldDirection) => revealLines(path, revealedBy(lines, fold, dir));
+  const all = `Show ${plural(n, 'hidden line')}`;
+  return (
+    <div class="fold-row">
+      <span class="fold-btns">
+        {n <= STEP ? (
+          <button class="fold-btn" type="button" aria-label={all} title={all} onClick={() => open('all')}>
+            <UnfoldIcon />
+          </button>
+        ) : (
+          <>
+            {fold.down && (
+              <button class="fold-btn" type="button" aria-label={`Show ${STEP} more lines below`} title={`Show ${STEP} more lines below`} onClick={() => open('down')}>
+                <ExpandDownIcon />
+              </button>
+            )}
+            {fold.up && (
+              <button class="fold-btn" type="button" aria-label={`Show ${STEP} more lines above`} title={`Show ${STEP} more lines above`} onClick={() => open('up')}>
+                <ExpandUpIcon />
+              </button>
+            )}
+          </>
+        )}
+      </span>
+      <button class="fold-label" type="button" onClick={() => open('all')}>
+        {plural(n, 'hidden line')}
+      </button>
+    </div>
+  );
 }
 
 function SlotRow({ slots, cls = '' }: { slots: Slots | null; cls?: string }) {
@@ -154,21 +230,18 @@ function Num({ file, side, num }: { file: string; side: Side; num: number | unde
   );
 }
 
-function UnifiedRows({ file: f, ranges, slotsAt }: RowsProps) {
+function UnifiedRows({ file: f, ranges, slotsAt, folds }: RowsProps) {
   return (
     <div class="rows">
       {f.hunks.map((h, hi) => (
         <Fragment key={hi}>
-          <div class="row hunk">
-            <span class="num" />
-            <span class="num" />
-            <span class="sign" />
-            <span class="code">{h.header}</span>
-          </div>
-          {h.lines.map((l, li) => {
+          <GapRow gap={hunkGap(f.hunks, hi)} />
+          {folds[hi]!.map((item) => {
+            if (item.kind === 'fold') return <FoldRow key={`f${item.from}`} path={f.path} lines={h.lines} fold={item} />;
+            const l = h.lines[item.index]!;
             const sel = isSelected(ranges, 'old', l.old) || isSelected(ranges, 'new', l.new);
             return (
-              <Fragment key={li}>
+              <Fragment key={`l${item.index}`}>
                 <UnifiedLine path={f.path} line={l} sel={sel} />
                 <SlotRow slots={slotsAt('old', l.kind === 'del' ? l.old : undefined)} />
                 <SlotRow slots={slotsAt('new', l.new)} />
@@ -178,6 +251,7 @@ function UnifiedRows({ file: f, ranges, slotsAt }: RowsProps) {
           })}
         </Fragment>
       ))}
+      <DiffEnd file={f} />
     </div>
   );
 }
@@ -235,34 +309,53 @@ function SideCell({ file, side, line, sel }: { file: string; side: Side; line: D
   );
 }
 
-function SplitRows({ file: f, ranges, slotsAt }: RowsProps) {
+function SplitRows({ file: f, ranges, slotsAt, folds }: RowsProps) {
+  // The visible lines between 2 folds form a segment. A fold holds only context lines, so each segment pairs on
+  // its own, the same as a whole hunk.
+  const rowsOf = (lines: DiffLine[], items: FoldItem[]) => {
+    const out = [];
+    let seg: DiffLine[] = [];
+    let segStart = 0;
+    const flush = () => {
+      pairs(seg).forEach(([l, r], pi) =>
+        out.push(
+          <Fragment key={`p${segStart}-${pi}`}>
+            <SplitLine
+              path={f.path}
+              left={l}
+              right={r}
+              selLeft={isSelected(ranges, 'old', l?.old)}
+              selRight={isSelected(ranges, 'new', r?.new)}
+            />
+            <SlotRow slots={slotsAt('old', l?.old)} cls="split-old" />
+            <SlotRow slots={slotsAt('new', r?.new)} cls="split-new" />
+          </Fragment>,
+        ),
+      );
+      seg = [];
+    };
+    for (const item of items) {
+      if (item.kind === 'line') {
+        if (!seg.length) segStart = item.index;
+        seg.push(lines[item.index]!);
+        continue;
+      }
+      flush();
+      out.push(<FoldRow key={`f${item.from}`} path={f.path} lines={lines} fold={item} />);
+    }
+    flush();
+    return out;
+  };
+
   return (
     <div class="rows split">
       {f.hunks.map((h, hi) => (
         <Fragment key={hi}>
-          <div class="srow hunk">
-            <div class="side">
-              <span class="num" />
-              <span class="sign" />
-              <span class="code">{h.header}</span>
-            </div>
-            <div class="side" />
-          </div>
-          {pairs(h.lines).map(([l, r], pi) => (
-            <Fragment key={pi}>
-              <SplitLine
-                path={f.path}
-                left={l}
-                right={r}
-                selLeft={isSelected(ranges, 'old', l?.old)}
-                selRight={isSelected(ranges, 'new', r?.new)}
-              />
-              <SlotRow slots={slotsAt('old', l?.old)} cls="split-old" />
-              <SlotRow slots={slotsAt('new', r?.new)} cls="split-new" />
-            </Fragment>
-          ))}
+          <GapRow gap={hunkGap(f.hunks, hi)} />
+          {rowsOf(h.lines, folds[hi]!)}
         </Fragment>
       ))}
+      <DiffEnd file={f} />
     </div>
   );
 }

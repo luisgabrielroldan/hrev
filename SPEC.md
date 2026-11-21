@@ -99,6 +99,15 @@ All text in the viewer is in English. The viewer uses a dark theme only.
 - At the top right of each file header: a counter of added and removed lines, and a button to comment on the whole file.
 - A binary file shows "Binary file changed" and no lines.
 - An empty diff shows "No changes".
+- The skill tells the agent to diff a fixed base commit (written as a commit id) against the working tree, so a refresh after a fix or a commit still shows the fix.
+- The diff can carry more context than the viewer shows. The skill asks for 200 lines (`git diff -U200`). The viewer shows 3 context lines around each change and folds a run of 2 or more other context lines into a fold row. The row shows the number of hidden lines.
+- A fold of at most 20 lines opens with 1 click. A larger fold opens 20 lines at a time, upward from the line below it or downward from the line above it. A click on the number of hidden lines opens the whole fold.
+- A fold never hides a line with a thread or a draft. A selection across a fold opens the fold over the selected lines.
+- A new diff (refresh) closes all folds again.
+- The lines in a fold are part of the diff, so the user can comment on them, and the placement rule (5.6) finds them like any other line.
+- A diff with 3 lines of context has no fold. A gap larger than the context of the diff stays closed: those lines are not in the diff.
+- The viewer does not show the hunk headers (`@@ … @@`). Where the file has lines that are not in the diff, above the first hunk or between 2 hunks, a row shows "N lines not shown" and the section name of the hunk header, such as a function name. That row does not open.
+- Below the last hunk of a changed file, a thin row with the same color marks the end of the lines in the diff. The diff does not give the length of the file, so the file can continue below that row. An added or a deleted file comes complete in the diff and has no such row.
 
 ### 5.4 Comments
 

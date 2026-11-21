@@ -11,11 +11,12 @@ Each review session has 2 roles. Decide your role before you run any command.
 
 ## Start a review
 
-1. Decide which diff the user wants. Write it to a file in your scratchpad. Always disable external diff tools and colors:
-   - last commit: `git diff --no-ext-diff --no-color HEAD~1 HEAD > <file>`
-   - branch with uncommitted changes: `git diff --no-ext-diff --no-color $(git merge-base main HEAD) > <file>`
-   - uncommitted changes only: `git diff --no-ext-diff --no-color HEAD > <file>`
-   Note: `git diff main` compares with the current `main`, not with the point where the branch started. Use `git merge-base` for a branch.
+1. Decide which diff the user wants, and find the commit id of its base:
+   - last commit: `git rev-parse HEAD~1`
+   - branch: `git merge-base main HEAD` (not `main`: `git diff main` compares with the current `main`, not with the point where the branch started)
+   - uncommitted changes: `git rev-parse HEAD`
+   Write the diff of that base against the working tree to a file in your scratchpad: `git diff --no-ext-diff --no-color -U200 <base id> > <file>`. Write the commit id itself in the command, not `HEAD` or a branch name. The diff then still shows your fixes after you change or commit code, and the same command works on every refresh. The diff also shows uncommitted changes that were there before the review.
+   The context is always 200 lines. It is not a choice. Never ask the user about it, and never tell the user how many lines of context the diff has. The viewer shows 3 lines around each change and folds the rest.
 2. Run in the background: `hrev open <file> --dir <scratchpad>/hrev --title "<short title>" --description "<what changed>" --source "<the git diff command>"`. This process is the server and keeps running. `--dir` is required: use your scratchpad folder, so you can read pasted images without permission prompts. Never use a folder inside the project.
 3. Read the id from the first line of its output (`id: <id>`). Keep the id. The output of that background task stays readable if you need the id again.
 4. Run in the background: `hrev wait <id>`.
@@ -50,7 +51,7 @@ If you are busy when a wait ends, finish your work first. Events stay in the que
 
 You are not the watcher. Another agent watches the session and answers your comments. Never run `open`, `wait`, `reply`, `refresh` or `show`: these commands would take over or break the work of the watcher. Use only `hrev state` and `hrev comment`.
 
-1. Read the threads and the diff source: `hrev state <id>`. Run the `source` command to see the diff.
+1. Read the threads and the diff source: `hrev state <id>`. Run the `source` command to see the diff. The command has `-U200` for the viewer. Run it with `-U3` in place of `-U200` for a short diff.
 2. Comment with `--author <your name>`, for example `--author codex`:
    - on lines: `hrev comment <id> <file> --lines 10-12 --author <name> <<'EOF'` … `EOF` (`--side old` for removed lines)
    - on a file: `hrev comment <id> <file> --author <name> <<'EOF'` … `EOF`
@@ -58,8 +59,16 @@ You are not the watcher. Another agent watches the session and answers your comm
 3. Your comments stay pending. Only the user sends them, in the viewer.
 4. Stop after 1 pass of comments. Tell the user that your comments are ready. Do not watch the session and do not check it again on your own. If the user asks you to read the answers, run `hrev state <id>` 1 time.
 
+## Codex
+
+In Codex, "in the background" never means `&`, `nohup` or `disown`. Codex stops such a process when the command ends, and the review server dies with it.
+
+- Run `hrev open …` as a plain command. Codex keeps it running in a terminal of its own. Read the id from its output.
+- Run `hrev wait <id>` as a plain command in another terminal. Poll that terminal until the command ends. Then handle the events (section "Handle events"), and start `hrev wait <id>` again the same way.
+- Do not end your turn while `hrev wait` runs. Codex does not wake you when a terminal ends, so a comment that arrives after your turn ends waits until the user writes to you. Keep polling, also after you reply in the review. End your turn only when the user tells you to stop watching, or when the session stops.
+
 ## Rules
 
 - Never resolve threads. Only the user resolves them.
-- Do not run `wait` in the foreground. It blocks until the user acts.
+- Outside Codex, do not run `wait` in the foreground. It blocks until the user acts.
 - Do not edit the files of a review session folder.

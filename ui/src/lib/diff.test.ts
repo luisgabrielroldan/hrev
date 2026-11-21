@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { DiffFile, Draft, Session } from '../types.ts';
-import { reconcileDrafts, selectionLines } from './diff.ts';
+import { hunkGap, reconcileDrafts, selectionLines } from './diff.ts';
 
 const file = (path: string, lines: [number, string][]): DiffFile => ({
   path, old_path: path, status: 'modified', binary: false, adds: 0, dels: 0,
@@ -26,4 +26,16 @@ test('reconcileDrafts keeps a draft on unchanged lines and moves a draft on chan
   const out = reconcileDrafts(drafts, session([file('a.go', [[1, 'a'], [2, 'new text']])]));
   assert.deepEqual(Object.keys(out).sort(), ['a.go|file', 'kept']);
   assert.equal(out['a.go|file']!.text, 'file note\n\nmove me');
+});
+
+test('hunkGap counts the file lines that are not in the diff, before the first hunk and between hunks', () => {
+  const h = (header: string, from: number, count: number) => ({
+    header,
+    lines: Array.from({ length: count }, (_, i) => ({ kind: 'ctx' as const, old: from + i, new: from + i, text: '' })),
+  });
+  const hunks = [h('@@ -10,5 +10,5 @@', 10, 5), h('@@ -30,5 +30,5 @@ func Run() {', 30, 5), h('@@ -35,2 +35,2 @@', 35, 2)];
+  assert.deepEqual(hunkGap(hunks, 0), { lines: 9, section: '' });
+  assert.deepEqual(hunkGap(hunks, 1), { lines: 15, section: 'func Run() {' });
+  assert.equal(hunkGap(hunks, 2), null);
+  assert.equal(hunkGap([h('@@ -1,3 +1,3 @@', 1, 3)], 0), null);
 });

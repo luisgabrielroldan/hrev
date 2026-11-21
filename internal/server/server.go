@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -180,18 +181,23 @@ func (s *Server) handleViewState(w http.ResponseWriter, r *http.Request) {
 	for i, t := range s.st.Threads {
 		threads[i] = ViewThread{Thread: t, OpenDefault: t.OpenByDefault()}
 	}
-	writeJSON(w, map[string]any{
+	out := map[string]any{
 		"id":          s.st.ID,
 		"title":       s.st.Title,
 		"description": s.st.Description,
 		"source":      s.st.Source,
 		"diff_time":   diffTime(s.st.ID),
 		"rev":         s.st.Rev,
-		"files":       s.files,
 		"threads":     threads,
 		"pending":     s.st.PendingCount(),
 		"agent":       s.agentStatusLocked(),
-	})
+	}
+	// The files are the largest part of the state, and they change only with a new diff. A viewer that already
+	// has the files of this rev passes it in ?rev=, and the answer leaves the files out.
+	if r.URL.Query().Get("rev") != strconv.Itoa(s.st.Rev) {
+		out["files"] = s.files
+	}
+	writeJSON(w, out)
 }
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {

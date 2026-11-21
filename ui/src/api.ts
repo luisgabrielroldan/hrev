@@ -1,5 +1,5 @@
 // The HTTP API of the hrev server. Every request carries the token of the page URL.
-import type { Session, ThreadSide } from './types.ts';
+import type { DiffFile, Session, ThreadSide } from './types.ts';
 
 export const token = new URLSearchParams(location.search).get('t') ?? '';
 
@@ -29,8 +29,12 @@ export interface NewComment {
   action: SaveMode;
 }
 
+/** The state as the server sends it. files is missing when the viewer already has the files of this rev. */
+export type StateResponse = Omit<Session, 'files'> & { files?: DiffFile[] };
+
 export const api = {
-  state: () => request<Session>('/api/state'),
+  /** state gets the session state. With knownRev, the server leaves out the files if the rev did not change. */
+  state: (knownRev?: number) => request<StateResponse>(knownRev === undefined ? '/api/state' : `/api/state?rev=${knownRev}`),
   send: () => post('/api/send', {}),
   createComment: (c: NewComment) => post('/api/comments', c),
   reply: (threadId: string, body: string, action: SaveMode) => post('/api/comments', { thread_id: threadId, body, action }),

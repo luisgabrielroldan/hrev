@@ -179,3 +179,20 @@ export const LinkIcon = () => (
     <path d="M7 9a3 3 0 0 0 4.2.2l2-2a3 3 0 0 0-4.2-4.2l-1 1M9 7a3 3 0 0 0-4.2-.2l-2 2A3 3 0 0 0 7 13l1-1" />
   </Svg>
 );
+
+// Fold icons: an arrow toward the lines that open, and both arrows to open all.
+export const ExpandUpIcon = () => (
+  <Svg stroke={1.5} round>
+    <path d="M8 13V4M4.5 7.5 8 4l3.5 3.5M3 2h10" />
+  </Svg>
+);
+export const ExpandDownIcon = () => (
+  <Svg stroke={1.5} round>
+    <path d="M8 3v9M4.5 8.5 8 12l3.5-3.5M3 14h10" />
+  </Svg>
+);
+export const UnfoldIcon = () => (
+  <Svg stroke={1.5} round>
+    <path d="M8 1.5v4M5.5 3.5 8 1l2.5 2.5M8 14.5v-4M5.5 12.5 8 15l2.5-2.5M3 8h10" />
+  </Svg>
+);
