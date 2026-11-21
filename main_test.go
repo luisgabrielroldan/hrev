@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -43,6 +44,9 @@ func buildHrev(t *testing.T) string {
 		return bin
 	}
 	bin := filepath.Join(t.TempDir(), "hrev")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
@@ -85,8 +89,14 @@ func TestWatcherCycleThroughCLI(t *testing.T) {
 	if err := open.Start(); err != nil {
 		t.Fatal(err)
 	}
-	// SIGTERM, not a kill: the server then exits normally, and a coverage build writes its data.
-	t.Cleanup(func() { open.Process.Signal(syscall.SIGTERM); open.Wait() })
+	// SIGTERM, not a kill: the server then exits normally, and a coverage build writes its data. Windows has no
+	// SIGTERM, so there the test kills the server.
+	t.Cleanup(func() {
+		if err := open.Process.Signal(syscall.SIGTERM); err != nil {
+			open.Process.Kill()
+		}
+		open.Wait()
+	})
 	lines := bufio.NewScanner(stdout)
 	head := map[string]string{}
 	for len(head) < 2 && lines.Scan() {

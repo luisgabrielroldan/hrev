@@ -28,6 +28,28 @@ jobs:
           cache-dependency-path: ui/package-lock.json
       - run: make test
 
+  # The Go tests on Windows. The viewer is the same on all platforms, so the other jobs test it.
+  test-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # The test diffs must keep LF line ends.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: cd ui && npm ci && npm run build
+      - run: go vet ./...
+      - run: go test ./...
+
   # Browser tests of the viewer against the real binary. The Ubuntu runner has Google Chrome installed.
   e2e:
     runs-on: ubuntu-latest

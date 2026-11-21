@@ -15,7 +15,7 @@ The agent learns all of this from the hrev skill.
 
 ## Install
 
-Download the archive for your platform from the [releases](https://github.com/luisgabrielroldan/hrev/releases) page. Each archive contains the `hrev` binary. The file `checksums.txt` has the SHA-256 checksum of each archive.
+Download the archive for your platform from the [releases](https://github.com/luisgabrielroldan/hrev/releases) page. Each archive contains the `hrev` binary (`hrev.exe` on Windows). Linux and macOS get a `.tar.gz` archive, Windows gets a `.zip` archive. The file `checksums.txt` has the SHA-256 checksum of each archive.
 
 To build from source, you need Go 1.24 or later and Node.js 22.18 or later.
 

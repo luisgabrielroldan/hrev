@@ -4,8 +4,8 @@ BIN ?= hrev
 # output of git describe, such as v1.2.3-4-gabc1234-dirty.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
-# The platforms of a release. hrev uses flock, so Windows is not a target.
-PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
+# The platforms of a release. Windows gets a .zip archive, the other platforms get a .tar.gz archive.
+PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64
 
 .PHONY: build ui ui-deps test e2e coverage dist clean
 
@@ -54,12 +54,14 @@ dist: ui
 		os=$${p%/*}; arch=$${p#*/}; name=hrev_$(VERSION)_$${os}_$${arch}; \
 		echo "== $$name"; \
 		mkdir -p dist/$$name; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$$name/hrev .; \
+		exe=hrev; [ $$os = windows ] && exe=hrev.exe; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$$name/$$exe .; \
 		cp LICENSE README.md dist/$$name/; \
-		tar -C dist -czf dist/$$name.tar.gz $$name; \
+		if [ $$os = windows ]; then (cd dist && zip -qr $$name.zip $$name); \
+		else tar -C dist -czf dist/$$name.tar.gz $$name; fi; \
 		rm -rf dist/$$name; \
 	done
-	cd dist && shasum -a 256 *.tar.gz > checksums.txt
+	cd dist && shasum -a 256 *.tar.gz *.zip > checksums.txt
 
 clean:
 	rm -rf $(BIN) dist
