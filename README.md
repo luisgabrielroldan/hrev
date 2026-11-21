@@ -1,6 +1,6 @@
 # hrev
 
-hrev ("human review") is a local code review for coding agents. It shows a diff in your browser like a pull request. You comment on lines or files, and the agent changes the code and replies in each thread. Nothing is pushed anywhere: the diff, the comments and the server stay on your machine.
+hrev ("human review") lets you review the code that your coding agent (Claude Code or Codex) wrote, the way you review a pull request. You comment on lines in your browser, and the agent changes the code and replies in each thread.
 
 ![A thread in hrev: the user asks a question on a line, and the agent replies after it changes the code](docs/thread.png)
 
